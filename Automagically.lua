@@ -610,6 +610,9 @@ end
 
 -- Mage Abilities
 ---- Multiple Specializations
+local ArcaneIntellect = Ability.add(1459, true, false)
+ArcaneIntellect.mana_cost = 4
+ArcaneIntellect.buff_duration = 3600
 local Counterspell = Ability.add(2139, false, true)
 Counterspell.mana_cost = 2
 Counterspell.cooldown_duration = 24
@@ -631,6 +634,13 @@ Counterspell.triggers_gcd = false
 ------ Procs
 
 ---- Frost
+local Frostbolt = Ability.add(116, false, true)
+Frostbolt.mana_cost = 2
+local Freeze = Ability.add(33395, false, true)
+Freeze.cooldown_duration = 25
+Freeze.buff_duration = 8
+Freeze.requires_pet = true
+Freeze.triggers_gcd = false
 local SummonWaterElemental = Ability.add(31687, false, true)
 SummonWaterElemental.mana_cost = 3
 SummonWaterElemental.cooldown_duration = 30
@@ -833,6 +843,13 @@ function SummonWaterElemental:usable()
 	return Ability.usable(self)
 end
 
+function Freeze:usable()
+	if not TargetIsStunnable() then
+		return false
+	end
+	return Ability.usable(self)
+end
+
 -- End Ability Modifications
 
 local function UpdateVars()
@@ -908,8 +925,12 @@ APL[SPEC.FIRE].main = function(self)
 end
 
 APL[SPEC.FROST].main = function(self)
-	if SummonWaterElemental:usable() then
+	if ArcaneIntellect:down() and ArcaneIntellect:usable() then
+		UseExtra(ArcaneIntellect)
+	elseif SummonWaterElemental:usable() then
 		UseExtra(SummonWaterElemental)
+	elseif Freeze:usable() then
+		UseExtra(Freeze)
 	end
 	if TimeInCombat() == 0 then
 		if not InArenaOrBattleground() then
@@ -1483,6 +1504,9 @@ local function UpdateAbilityData()
 	for _, ability in next, abilities do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = (IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) or Azerite.traits[ability.spellId]) and true or false
+	end
+	if SummonWaterElemental.known then
+		Freeze.known = true
 	end
 end
 
