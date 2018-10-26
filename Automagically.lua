@@ -617,9 +617,23 @@ local Counterspell = Ability.add(2139, false, true)
 Counterspell.mana_cost = 2
 Counterspell.cooldown_duration = 24
 Counterspell.triggers_gcd = false
+local TimeWarp = Ability.add(80353, true, true)
+TimeWarp.mana_cost = 4
+TimeWarp.buff_duration = 40
+TimeWarp.cooldown_duration = 300
+TimeWarp.triggers_gcd = false
 ------ Procs
 
 ------ Talents
+local IncantersFlow = Ability.add(116267, true, true, 236219)
+local MirrorImage = Ability.add(55342, true, true)
+MirrorImage.mana_cost = 2
+MirrorImage.buff_duration = 40
+MirrorImage.cooldown_duration = 120
+local RuneOfPower = Ability.add(116011, true, true, 116014)
+RuneOfPower.requires_charge = true
+RuneOfPower.buff_duration = 10
+RuneOfPower.cooldown_duration = 40
 
 ---- Arcane
 
@@ -634,20 +648,90 @@ Counterspell.triggers_gcd = false
 ------ Procs
 
 ---- Frost
-local Frostbolt = Ability.add(116, false, true)
-Frostbolt.mana_cost = 2
+local Blizzard = Ability.add(190356, false, true, 190357)
+Blizzard.mana_cost = 2.5
+Blizzard.cooldown_duration = 8
+Blizzard:setAutoAoe(true)
+local ConeOfCold = Ability.add(120, false, true)
+ConeOfCold.mana_cost = 4
+ConeOfCold.cooldown_duration = 12
+ConeOfCold:setAutoAoe(true)
+local Flurry = Ability.add(44614, false, true)
+Flurry.mana_cost = 1
+Flurry.velocity = 50
 local Freeze = Ability.add(33395, false, true)
 Freeze.cooldown_duration = 25
 Freeze.buff_duration = 8
 Freeze.requires_pet = true
 Freeze.triggers_gcd = false
+Freeze:setAutoAoe(true)
+local Frostbolt = Ability.add(116, false, true)
+Frostbolt.mana_cost = 2
+Frostbolt.velocity = 35
+local FrostNova = Ability.add(122, false, true)
+FrostNova.mana_cost = 2
+FrostNova.buff_duration = 8
+FrostNova:setAutoAoe(true)
+local FrozenOrb = Ability.add(84714, false, true, 84721)
+FrozenOrb.mana_cost = 1
+FrozenOrb.velocity = 20
+FrozenOrb.buff_duration = 15
+FrozenOrb.cooldown_duration = 60
+FrozenOrb:setAutoAoe(true)
+local IceBarrier = Ability.add(11426, true, true)
+IceBarrier.mana_cost = 3
+IceBarrier.buff_duration = 60
+IceBarrier.cooldown_duration = 25
+local IceLance = Ability.add(30455, false, true)
+IceLance.mana_cost = 1
+IceLance.velocity = 47
+local IcyVeins = Ability.add(12472, true, true)
+IcyVeins.buff_duration = 20
+IcyVeins.cooldown_duration = 180
 local SummonWaterElemental = Ability.add(31687, false, true)
 SummonWaterElemental.mana_cost = 3
 SummonWaterElemental.cooldown_duration = 30
 ------ Talents
-
+local BoneChilling = Ability.add(205027, false, true, 205766)
+BoneChilling.buff_duration = 8
+local ChainReaction = Ability.add(278309, true, true, 278310)
+ChainReaction.buff_duration = 10
+local CometStorm = Ability.add(153595, false, true, 153596)
+CometStorm.mana_cost = 1
+CometStorm.cooldown_duration = 30
+CometStorm:setAutoAoe(true)
+local Ebonbolt = Ability.add(257537, false, true, 257538)
+Ebonbolt.mana_cost = 2
+Ebonbolt.velocity = 30
+Ebonbolt.cooldown_duration = 45
+local FreezingRain = Ability.add(270233, true, true, 270232)
+FreezingRain.buff_duration = 12
+local FrozenTouch = Ability.add(205030, false, true)
+local GlacialSpike = Ability.add(199786, false, true)
+GlacialSpike.mana_cost = 1
+GlacialSpike.velocity = 40
+local IceFloes = Ability.add(108839, true, true)
+IceFloes.requires_charge = true
+IceFloes.buff_duration = 15
+IceFloes.cooldown_duration = 20
+local IceNova = Ability.add(157997, false, true)
+IceNova.buff_duration = 2
+IceNova.cooldown_duration = 25
+IceNova:setAutoAoe(true)
+local LonelyWinter = Ability.add(205024, false, true)
+local RayOfFrost = Ability.add(205021, false, true)
+RayOfFrost.mana_cost = 2
+RayOfFrost.buff_duration = 5
+RayOfFrost.cooldown_duration = 75
+local SplittingIce = Ability.add(56377, false, true)
+local ThermalVoid = Ability.add(155149, false, true)
 ------ Procs
-
+local BrainFreeze = Ability.add(190446, true, true, 190447)
+BrainFreeze.buff_duration = 15
+local FingersOfFrost = Ability.add(44544, true, true)
+FingersOfFrost.buff_duration = 15
+local Icicles = Ability.add(205473, true, true)
+Icicles.buff_duration = 60
 -- Azerite Traits
 
 -- Racials
@@ -846,6 +930,28 @@ end
 function Freeze:usable()
 	if not TargetIsStunnable() then
 		return false
+	end
+	return Ability.usable(self)
+end
+
+function TimeWarp:usable()
+	local _, i, id
+	for i = 1, 40 do
+		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HARMFUL')
+		if (
+			id == 57724 or	-- Sated (Bloodlust, Horde Shaman)
+			id == 32182 or	-- Heroism (Alliance Shaman)
+			id == 80354 or	-- Temporal Displacement (Time Warp, Mage)
+			id == 90355 or	-- Ancient Hysteria (Mage Pet - Core Hound)
+			id == 160452 or -- Netherwinds (Mage Pet - Nether Ray)
+			id == 264667 or -- Primal Rage (Mage Pet - Ferocity)
+			id == 178207 or -- Drums of Fury (Leatherworking)
+			id == 146555 or -- Drums of Rage (Leatherworking)
+			id == 230935 or -- Drums of the Mountain (Leatherworking)
+			id == 256740    -- Drums of the Maelstrom (Leatherworking)
+		) then
+			return false
+		end
 	end
 	return Ability.usable(self)
 end
