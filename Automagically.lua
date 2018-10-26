@@ -310,6 +310,7 @@ function Ability.add(spellId, buff, player, spellId2)
 		buff_duration = 0,
 		tick_interval = 0,
 		velocity = 0,
+		last_used = 0,
 		auraTarget = buff and 'player' or 'target',
 		auraFilter = (buff and 'HELPFUL' or 'HARMFUL') .. (player and '|PLAYER' or '')
 	}
@@ -757,7 +758,8 @@ Icicles.buff_duration = 60
 local WintersChill = Ability.add(228358, false, true)
 WintersChill.buff_duration = 1
 -- Azerite Traits
-
+local WintersReach = Ability.add(273346, true, true, 273347)
+WintersReach.buff_duration = 15
 -- Racials
 
 -- Trinket Effects
@@ -974,6 +976,12 @@ function FrostNova:usable()
 		return false
 	end
 	return Ability.usable(self)
+end
+
+function FrozenOrb:inFlight()
+	if (var.time - self.last_used) < 10 then
+		return true
+	end
 end
 
 function TimeWarp:usable()
@@ -1220,7 +1228,7 @@ actions.movement+=/ice_floes,if=buff.ice_floes.down
 end
 
 APL[SPEC.FROST].single = function(self)
-	if Freeze:usable() and not TargetIsFrozen() and ((CometStorm:usable() or CometStorm:previous()) or Ebonbolt:casting() or (GlacialSpike:casting() and BrainFreeze:down())) then
+	if Freeze:usable() and not TargetIsFrozen() and (CometStorm:previous() or (Enemies() < 3 and BrainFreeze:down() and (Ebonbolt:casting() or GlacialSpike:casting()))) then
 		UseExtra(Freeze)
 	end
 --[[
@@ -1251,6 +1259,62 @@ actions.single+=/frostbolt
 actions.single+=/call_action_list,name=movement
 actions.single+=/ice_lance
 ]]
+	if IceNova:usable() and WintersChill:up() then
+		return IceNova
+	end
+	if Flurry:usable() then
+		if Ebonbolt.known and Ebonbolt:previous() and (not GlacialSpike.known or Icicles:stack() < 4 or BrainFreeze:up()) then
+			return Flurry
+		end
+		if GlacialSpike.known and GlacialSpike:previous() and BrainFreeze:up() then
+			return Flurry
+		end
+		if Frostbolt:previous() and BrainFreeze:up() and (not GlacialSpike.known or Icicles:stack() < 4) then
+			return Flurry
+		end
+	end
+	if FrozenOrb:usable() then
+		UseCooldown(FrozenOrb)
+	end
+	if Blizzard:usable() and (Enemies() > 2 or (Enemies() > 1 and FreezingRain:up() and FingersOfFrost:stack() < 2)) then
+		return Blizzard
+	end
+	if IceLance:usable() and FingersOfFrost:up() then
+		return IceLance
+	end
+	if CometStorm:usable() then
+		if Freeze:usable() and not TargetIsFrozen() then
+			UseExtra(Freeze)
+		end
+		return CometStorm
+	end
+	if Ebonbolt:usable() then
+		return Ebonbolt
+	end
+	if RayOfFrost:usable() and not FrozenOrb:inFlight() then
+		return RayOfFrost
+	end
+	if Blizzard:usable() and (FreezingRain:up() or Enemies() > 1) then
+		return Blizzard
+	end
+	if GlacialSpike:usable() and (BrainFreeze:up() or Ebonbolt:previous() or (Enemies() > 1 and SplittingIce.known)) then
+		return GlacialSpike
+	end
+	if IceNova:usable() then
+		return IceNova
+	end
+	if Flurry:usable() and WintersReach.known and BrainFreeze:down() and WintersReach:up() then
+		return Flurry
+	end
+	if Frostbolt:usable() then
+		return Frostbolt
+	end
+	if PlayerIsMoving() then
+		self:movement()
+	end
+	if IceLance:usable() then
+		return IceLance
+	end
 end
 
 APL[SPEC.FROST].aoe = function(self)
@@ -1758,12 +1822,13 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 --[ DEBUG ]]
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		var.last_ability = castedAbility
+		castedAbility.last_used = GetTime()
 		if castedAbility.triggers_gcd then
 			PreviousGCD[10] = nil
 			table.insert(PreviousGCD, 1, castedAbility)
 		end
 		if castedAbility.travel_start then
-			castedAbility.travel_start[dstGUID] = GetTime()
+			castedAbility.travel_start[dstGUID] = castedAbility.last_used
 		end
 		if Opt.previous and amagicPanel:IsVisible() then
 			amagicPreviousPanel.ability = castedAbility
