@@ -121,19 +121,22 @@ local targetModes = {
 		{1, ''},
 		{2, '2'},
 		{3, '3'},
-		{4, '4+'}
+		{4, '4'},
+		{5, '5+'}
 	},
 	[SPEC.FIRE] = {
 		{1, ''},
 		{2, '2'},
 		{3, '3'},
-		{4, '4+'}
+		{4, '4'},
+		{5, '5+'}
 	},
 	[SPEC.FROST] = {
 		{1, ''},
 		{2, '2'},
 		{3, '3'},
-		{4, '4+'}
+		{4, '4'},
+		{5, '5+'}
 	}
 }
 
@@ -423,6 +426,9 @@ function Ability:cooldownDuration()
 end
 
 function Ability:cooldown()
+	if self.cooldown_duration > 0 and self:casting() then
+		return self.cooldown_duration
+	end
 	local start, duration = GetSpellCooldown(self.spellId)
 	if start == 0 then
 		return 0
@@ -477,6 +483,10 @@ function Ability:duration()
 	return self.hasted_duration and (var.haste_factor * self.buff_duration) or self.buff_duration
 end
 
+function Ability:casting()
+	return UnitCastingInfo('player') == self.name
+end
+
 function Ability:channeling()
 	return UnitChannelInfo('player') == self.name
 end
@@ -502,7 +512,7 @@ function Ability:tickTime()
 end
 
 function Ability:previous()
-	if self:channeling() then
+	if self:casting() or self:channeling() then
 		return true
 	end
 	return PreviousGCD[1] == self or var.last_ability == self
@@ -613,6 +623,9 @@ end
 local ArcaneIntellect = Ability.add(1459, true, false)
 ArcaneIntellect.mana_cost = 4
 ArcaneIntellect.buff_duration = 3600
+local Blink = Ability.add(1953, true, true)
+Blink.mana_cost = 2
+Blink.cooldown_duration = 15
 local Counterspell = Ability.add(2139, false, true)
 Counterspell.mana_cost = 2
 Counterspell.cooldown_duration = 24
@@ -634,7 +647,11 @@ local RuneOfPower = Ability.add(116011, true, true, 116014)
 RuneOfPower.requires_charge = true
 RuneOfPower.buff_duration = 10
 RuneOfPower.cooldown_duration = 40
-
+local Shimmer = Ability.add(212653, true, true)
+Shimmer.mana_cost = 2
+Shimmer.cooldown_duration = 20
+Shimmer.requires_charge = true
+Shimmer.triggers_gcd = false
 ---- Arcane
 
 ------ Talents
@@ -652,31 +669,35 @@ local Blizzard = Ability.add(190356, false, true, 190357)
 Blizzard.mana_cost = 2.5
 Blizzard.cooldown_duration = 8
 Blizzard:setAutoAoe(true)
+local Chilled = Ability.add(205708, false, true)
+Chilled.buff_duration = 15
 local ConeOfCold = Ability.add(120, false, true)
 ConeOfCold.mana_cost = 4
+ConeOfCold.buff_duration = 5
 ConeOfCold.cooldown_duration = 12
 ConeOfCold:setAutoAoe(true)
-local Flurry = Ability.add(44614, false, true)
+local Flurry = Ability.add(44614, false, true, 228354)
 Flurry.mana_cost = 1
-Flurry.velocity = 50
+Flurry.buff_duration = 1
+Flurry:setVelocity(50)
 local Freeze = Ability.add(33395, false, true)
 Freeze.cooldown_duration = 25
 Freeze.buff_duration = 8
 Freeze.requires_pet = true
 Freeze.triggers_gcd = false
 Freeze:setAutoAoe(true)
-local Frostbolt = Ability.add(116, false, true)
+local Frostbolt = Ability.add(116, false, true, 228597)
 Frostbolt.mana_cost = 2
-Frostbolt.velocity = 35
+Frostbolt:setVelocity(35)
 local FrostNova = Ability.add(122, false, true)
 FrostNova.mana_cost = 2
 FrostNova.buff_duration = 8
 FrostNova:setAutoAoe(true)
 local FrozenOrb = Ability.add(84714, false, true, 84721)
 FrozenOrb.mana_cost = 1
-FrozenOrb.velocity = 20
 FrozenOrb.buff_duration = 15
 FrozenOrb.cooldown_duration = 60
+FrozenOrb:setVelocity(20)
 FrozenOrb:setAutoAoe(true)
 local IceBarrier = Ability.add(11426, true, true)
 IceBarrier.mana_cost = 3
@@ -684,7 +705,7 @@ IceBarrier.buff_duration = 60
 IceBarrier.cooldown_duration = 25
 local IceLance = Ability.add(30455, false, true)
 IceLance.mana_cost = 1
-IceLance.velocity = 47
+IceLance:setVelocity(47)
 local IcyVeins = Ability.add(12472, true, true)
 IcyVeins.buff_duration = 20
 IcyVeins.cooldown_duration = 180
@@ -702,14 +723,15 @@ CometStorm.cooldown_duration = 30
 CometStorm:setAutoAoe(true)
 local Ebonbolt = Ability.add(257537, false, true, 257538)
 Ebonbolt.mana_cost = 2
-Ebonbolt.velocity = 30
 Ebonbolt.cooldown_duration = 45
+Ebonbolt:setVelocity(30)
 local FreezingRain = Ability.add(270233, true, true, 270232)
 FreezingRain.buff_duration = 12
 local FrozenTouch = Ability.add(205030, false, true)
-local GlacialSpike = Ability.add(199786, false, true)
+local GlacialSpike = Ability.add(199786, false, true, 228600)
 GlacialSpike.mana_cost = 1
-GlacialSpike.velocity = 40
+GlacialSpike.buff_duration = 4
+GlacialSpike:setVelocity(40)
 local IceFloes = Ability.add(108839, true, true)
 IceFloes.requires_charge = true
 IceFloes.buff_duration = 15
@@ -732,6 +754,8 @@ local FingersOfFrost = Ability.add(44544, true, true)
 FingersOfFrost.buff_duration = 15
 local Icicles = Ability.add(205473, true, true)
 Icicles.buff_duration = 60
+local WintersChill = Ability.add(228358, false, true)
+WintersChill.buff_duration = 1
 -- Azerite Traits
 
 -- Racials
@@ -896,7 +920,14 @@ local function BloodlustActive()
 	end
 end
 
-local function TargetIsStunnable()
+local function PlayerIsMoving()
+	return GetUnitSpeed('player') ~= 0
+end
+
+local function TargetIsFreezable()
+	if Target.freezable ~= '?' then
+		return Target.freezable
+	end
 	if UnitIsPlayer('target') then
 		return true
 	end
@@ -906,10 +937,14 @@ local function TargetIsStunnable()
 	if var.instance == 'raid' then
 		return false
 	end
-	if UnitHealthMax('target') > UnitHealthMax('player') * 25 then
+	if UnitHealthMax('target') > UnitHealthMax('player') * 10 then
 		return false
 	end
 	return true
+end
+
+local function TargetIsFrozen()
+	return FrostNova:up() or IceNova:up() or Freeze:up() or WintersChill:up() or GlacialSpike:up()
 end
 
 local function InArenaOrBattleground()
@@ -928,7 +963,14 @@ function SummonWaterElemental:usable()
 end
 
 function Freeze:usable()
-	if not TargetIsStunnable() then
+	if not TargetIsFreezable() then
+		return false
+	end
+	return Ability.usable(self)
+end
+
+function FrostNova:usable()
+	if not TargetIsFreezable() then
 		return false
 	end
 	return Ability.usable(self)
@@ -939,21 +981,53 @@ function TimeWarp:usable()
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HARMFUL')
 		if (
-			id == 57724 or	-- Sated (Bloodlust, Horde Shaman)
-			id == 32182 or	-- Heroism (Alliance Shaman)
-			id == 80354 or	-- Temporal Displacement (Time Warp, Mage)
-			id == 90355 or	-- Ancient Hysteria (Mage Pet - Core Hound)
-			id == 160452 or -- Netherwinds (Mage Pet - Nether Ray)
-			id == 264667 or -- Primal Rage (Mage Pet - Ferocity)
-			id == 178207 or -- Drums of Fury (Leatherworking)
-			id == 146555 or -- Drums of Rage (Leatherworking)
-			id == 230935 or -- Drums of the Mountain (Leatherworking)
-			id == 256740    -- Drums of the Maelstrom (Leatherworking)
+			id == 57724 or	-- Sated
+			id == 57723 or	-- Exhaustion
+			id == 80354	-- Temporal Displacement
 		) then
 			return false
 		end
 	end
 	return Ability.usable(self)
+end
+
+function BrainFreeze:up()
+	if Ebonbolt:casting() then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function GlacialSpike:up()
+	if TargetIsFreezable() and self:casting() then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function GlacialSpike:usable()
+	if Icicles:stack() < 5 or Icicles:remains() < self:castTime() then
+		return false
+	end
+	return Ability.usable(self)
+end
+
+function WintersChill:up()
+	if Flurry:traveling() then
+		return true
+	end
+	return Ability.up(self)
+end
+
+function Icicles:stack()
+	if GlacialSpike:casting() then
+		return 0
+	end
+	local count = Ability.stack(self)
+	if Frostbolt:casting() or Flurry:casting() then
+		count = count + 1
+	end
+	return min(5, count)
 end
 
 -- End Ability Modifications
@@ -1035,15 +1109,226 @@ APL[SPEC.FROST].main = function(self)
 		UseExtra(ArcaneIntellect)
 	elseif SummonWaterElemental:usable() then
 		UseExtra(SummonWaterElemental)
-	elseif Freeze:usable() then
-		UseExtra(Freeze)
 	end
+--[[
+# Executed before combat begins. Accepts non-harmful actions only.
+actions.precombat=flask
+actions.precombat+=/food
+actions.precombat+=/augmentation
+actions.precombat+=/arcane_intellect
+actions.precombat+=/water_elemental
+actions.precombat+=/snapshot_stats
+actions.precombat+=/mirror_image
+actions.precombat+=/potion
+actions.precombat+=/frostbolt
+
+# Executed every time the actor is available.
+
+]]
 	if TimeInCombat() == 0 then
 		if not InArenaOrBattleground() then
 			if Opt.pot and BattlePotionOfIntellect:usable() then
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
+		if MirrorImage:usable() then
+			UseCooldown(MirrorImage)
+		end
+		if Frostbolt:usable() then
+			return Frostbolt
+		end
+	end
+--[[
+# If the mage has FoF after casting instant Flurry, we can delay the Ice Lance and use other high priority action, if available.
+actions+=/ice_lance,if=prev_gcd.1.flurry&brain_freeze_active&!buff.fingers_of_frost.react
+actions+=/call_action_list,name=cooldowns
+# The target threshold isn't exact. Between 3-5 targets, the differences between the ST and AoE action lists are rather small. However, Freezing Rain prefers using AoE action list sooner as it benefits greatly from the high priority Blizzard action.
+actions+=/call_action_list,name=aoe,if=active_enemies>3&talent.freezing_rain.enabled|active_enemies>4
+actions+=/call_action_list,name=single
+]]
+	if IceLance:usable() and Flurry:previous() and not FingersOfFrost:up() then
+		return IceLance
+	end
+	self:cooldowns()
+	if Enemies() > (FreezingRain.known and 3 or 4) then
+		local apl = self:aoe()
+		if apl then return apl end
+	end
+	return self:single()
+end
+
+APL[SPEC.FROST].cooldowns = function(self)
+--[[
+actions.cooldowns=icy_veins
+actions.cooldowns+=/mirror_image
+# Rune of Power is always used with Frozen Orb. Any leftover charges at the end of the fight should be used, ideally if the boss doesn't die in the middle of the Rune buff.
+actions.cooldowns+=/rune_of_power,if=prev_gcd.1.frozen_orb|time_to_die>10+cast_time&time_to_die<20
+# On single target fights, the cooldown of Rune of Power is lower than the cooldown of Frozen Orb, this gives extra Rune of Power charges that should be used with active talents, if possible.
+actions.cooldowns+=/call_action_list,name=talent_rop,if=talent.rune_of_power.enabled&active_enemies=1&cooldown.rune_of_power.full_recharge_time<cooldown.frozen_orb.remains
+actions.cooldowns+=/potion,if=prev_gcd.1.icy_veins|target.time_to_die<70
+actions.cooldowns+=/use_items
+actions.cooldowns+=/blood_fury
+actions.cooldowns+=/berserking
+actions.cooldowns+=/lights_judgment
+actions.cooldowns+=/fireblood
+actions.cooldowns+=/ancestral_call
+]]
+	if IcyVeins:usable() then
+		return UseCooldown(IcyVeins)
+	end
+	if MirrorImage:usable() then
+		return UseCooldown(MirrorImage)
+	end
+	if RuneOfPower:usable() then
+		if FrozenOrb:previous() or (Target.timeToDie > (10 + RuneOfPower:castTime()) and Target.timeToDie < 20) then
+			return UseCooldown(RuneOfPower)
+		end
+		if Enemies() == 1 and RuneOfPower:fullRechargeTime() < FrozenOrb:cooldown() then
+--[[
+# With Glacial Spike, Rune of Power should be used right before the Glacial Spike combo (i.e. with 5 Icicles and a Brain Freeze). When Ebonbolt is off cooldown, Rune of Power can also be used just with 5 Icicles.
+actions.talent_rop=rune_of_power,if=talent.glacial_spike.enabled&buff.icicles.stack=5&(buff.brain_freeze.react|talent.ebonbolt.enabled&cooldown.ebonbolt.remains<cast_time)
+# Without Glacial Spike, Rune of Power should be used before any bigger cooldown (Ebonbolt, Comet Storm, Ray of Frost) or when Rune of Power is about to reach 2 charges.
+actions.talent_rop+=/rune_of_power,if=!talent.glacial_spike.enabled&(talent.ebonbolt.enabled&cooldown.ebonbolt.remains<cast_time|talent.comet_storm.enabled&cooldown.comet_storm.remains<cast_time|talent.ray_of_frost.enabled&cooldown.ray_of_frost.remains<cast_time|charges_fractional>1.9)
+]]
+			local rop_cast = RuneOfPower:castTime()
+			if GlacialSpike.known then
+				if Icicles:stack() == 5 and (BrainFreeze:up() or (Ebonbolt.known and Ebonbolt:cooldown() < rop_cast)) then
+					return UseCooldown(RuneOfPower)
+				end
+			elseif RuneOfPower:chargesFractional() > 1.9 or (Ebonbolt.known and Ebonbolt:cooldown() < rop_cast) or (CometStorm.known and CometStorm:cooldown() < rop_cast) or (RayOfFrost.known and RayOfFrost:cooldown() < rop_cast) then
+				return UseCooldown(RuneOfPower)
+			end
+		end
+	end
+	if Opt.pot and BattlePotionOfIntellect:usable() and (IcyVeins:previous() or Target.timeToDie < 70) then
+		return UseCooldown(BattlePotionOfIntellect)
+	end
+end
+
+APL[SPEC.FROST].movement = function(self)
+--[[
+actions.movement=blink,if=movement.distance>10
+actions.movement+=/ice_floes,if=buff.ice_floes.down
+]]
+	if Blink:usable() then
+		UseExtra(Blink)
+	elseif Shimmer:usable() then
+		UseExtra(Shimmer)
+	elseif IceFloes:usable() then
+		UseExtra(IceFloes)
+	end
+end
+
+APL[SPEC.FROST].single = function(self)
+	if Freeze:usable() and not TargetIsFrozen() and ((CometStorm:usable() or CometStorm:previous()) or Ebonbolt:casting() or (GlacialSpike:casting() and BrainFreeze:down())) then
+		UseExtra(Freeze)
+	end
+--[[
+# In some situations, you can shatter Ice Nova even after already casting Flurry and Ice Lance. Otherwise this action is used when the mage has FoF after casting Flurry, see above.
+actions.single=ice_nova,if=cooldown.ice_nova.ready&debuff.winters_chill.up
+# Without GS, Ebonbolt is always shattered. With GS, Ebonbolt is shattered if it would waste Brain Freeze charge (i.e. when the mage starts casting Ebonbolt with Brain Freeze active) or when below 4 Icicles (if Ebonbolt is cast when the mage has 4-5 Icicles, it's better to use the Brain Freeze from it on Glacial Spike).
+actions.single+=/flurry,if=talent.ebonbolt.enabled&prev_gcd.1.ebonbolt&(!talent.glacial_spike.enabled|buff.icicles.stack<4|buff.brain_freeze.react)
+# Glacial Spike is always shattered.
+actions.single+=/flurry,if=talent.glacial_spike.enabled&prev_gcd.1.glacial_spike&buff.brain_freeze.react
+# Without GS, the mage just tries to shatter as many Frostbolts as possible. With GS, the mage only shatters Frostbolt that would put them at 1-3 Icicle stacks. Difference between shattering Frostbolt with 1-3 Icicles and 1-4 Icicles is small, but 1-3 tends to be better in more situations (the higher GS damage is, the more it leans towards 1-3). Forcing shatter on Frostbolt is still a small gain, so is not caring about FoF. Ice Lance is too weak to warrant delaying Brain Freeze Flurry.
+actions.single+=/flurry,if=prev_gcd.1.frostbolt&buff.brain_freeze.react&(!talent.glacial_spike.enabled|buff.icicles.stack<4)
+actions.single+=/frozen_orb
+# With Freezing Rain and at least 2 targets, Blizzard needs to be used with higher priority to make sure you can fit both instant Blizzards into a single Freezing Rain. Starting with three targets, Blizzard leaves the low priority filler role and is used on cooldown (and just making sure not to waste Brain Freeze charges) with or without Freezing Rain.
+actions.single+=/blizzard,if=active_enemies>2|active_enemies>1&cast_time=0&buff.fingers_of_frost.react<2
+# Trying to pool charges of FoF for anything isn't worth it. Use them as they come.
+actions.single+=/ice_lance,if=buff.fingers_of_frost.react
+actions.single+=/comet_storm
+actions.single+=/ebonbolt
+# Ray of Frost is used after all Fingers of Frost charges have been used and there isn't active Frozen Orb that could generate more. This is only a small gain against multiple targets, as Ray of Frost isn't too impactful.
+actions.single+=/ray_of_frost,if=!action.frozen_orb.in_flight&ground_aoe.frozen_orb.remains=0
+# Blizzard is used as low priority filler against 2 targets. When using Freezing Rain, it's a medium gain to use the instant Blizzard even against a single target, especially with low mastery.
+actions.single+=/blizzard,if=cast_time=0|active_enemies>1
+# Glacial Spike is used when there's a Brain Freeze proc active (i.e. only when it can be shattered). This is a small to medium gain in most situations. Low mastery leans towards using it when available. When using Splitting Ice and having another target nearby, it's slightly better to use GS when available, as the second target doesn't benefit from shattering the main target.
+actions.single+=/glacial_spike,if=buff.brain_freeze.react|prev_gcd.1.ebonbolt|active_enemies>1&talent.splitting_ice.enabled
+actions.single+=/ice_nova
+actions.single+=/flurry,if=azerite.winters_reach.enabled&!buff.brain_freeze.react&buff.winters_reach.react
+actions.single+=/frostbolt
+actions.single+=/call_action_list,name=movement
+actions.single+=/ice_lance
+]]
+end
+
+APL[SPEC.FROST].aoe = function(self)
+	if Freeze:usable() and not TargetIsFrozen() then
+		if CometStorm.known and CometStorm:cooldown() > 28 then 
+			UseExtra(Freeze)
+		elseif GlacialSpike.known and SplittingIce.known and GlacialSpike:casting() and BrainFreeze:down() then
+			UseExtra(Freeze)
+		end
+	end
+--[[
+# With Freezing Rain, it's better to prioritize using Frozen Orb when both FO and Blizzard are off cooldown. Without Freezing Rain, the converse is true although the difference is miniscule until very high target counts.
+actions.aoe=frozen_orb
+actions.aoe+=/blizzard
+actions.aoe+=/comet_storm
+actions.aoe+=/ice_nova
+# Simplified Flurry conditions from the ST action list. Since the mage is generating far less Brain Freeze charges, the exact condition here isn't all that important.
+actions.aoe+=/flurry,if=prev_gcd.1.ebonbolt|buff.brain_freeze.react&(prev_gcd.1.frostbolt&(buff.icicles.stack<4|!talent.glacial_spike.enabled)|prev_gcd.1.glacial_spike)
+actions.aoe+=/ice_lance,if=buff.fingers_of_frost.react
+# The mage will generally be generating a lot of FoF charges when using the AoE action list. Trying to delay Ray of Frost until there are no FoF charges and no active Frozen Orbs would lead to it not being used at all.
+actions.aoe+=/ray_of_frost
+actions.aoe+=/ebonbolt
+actions.aoe+=/glacial_spike
+# Using Cone of Cold is mostly DPS neutral with the AoE target thresholds. It only becomes decent gain with roughly 7 or more targets.
+actions.aoe+=/cone_of_cold
+actions.aoe+=/frostbolt
+actions.aoe+=/call_action_list,name=movement
+actions.aoe+=/ice_lance
+]]
+	if FrozenOrb:usable() then
+		return FrozenOrb
+	end
+	if Blizzard:usable() then
+		return Blizzard
+	end
+	if CometStorm:usable() then
+		if Freeze:usable() and not TargetIsFrozen() then
+			UseExtra(Freeze)
+		end
+		return CometStorm
+	end
+	if IceNova:usable() then
+		if Freeze:usable() and not TargetIsFrozen() and (not CometStorm.known or CometStorm:cooldown() > 25) then
+			UseExtra(Freeze)
+		end
+		return IceNova
+	end
+	if Flurry:usable() and (Ebonbolt:previous() or (BrainFreeze:up() and ((Frostbolt:previous() and (Icicles:stack() < 4 or not GlacialSpike.known)) or GlacialSpike:previous()))) then
+		return Flurry
+	end
+	if IceLance:usable() and FingersOfFrost:up() then
+		return IceLance
+	end
+	if RayOfFrost:usable() then
+		return RayOfFrost
+	end
+	if Ebonbolt:usable() then
+		return Ebonbolt
+	end
+	if GlacialSpike:usable() then
+		return GlacialSpike
+	end
+--[[
+	if ConeOfCold:usable() and Enemies() >= 5 then
+		UseExtra(ConeOfCold)
+	end
+]]
+	if IceLance:usable() and TargetIsFrozen() and not IceLance:previous() then
+		return IceLance
+	end
+	if Frostbolt:usable() then
+		return Frostbolt
+	end
+	if PlayerIsMoving() then
+		self:movement()
+	end
+	if IceLance:usable() then
+		return IceLance
 	end
 end
 
@@ -1445,7 +1730,7 @@ function events:ADDON_LOADED(name)
 end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED()
-	local timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName = CombatLogGetCurrentEventInfo()
+	local timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName, spellSchool, extraType = CombatLogGetCurrentEventInfo()
 	if Opt.auto_aoe then
 		if eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED' then
 			if dstGUID == var.player then
@@ -1498,6 +1783,17 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and amagicPanel:IsVisible() and castedAbility == amagicPreviousPanel.ability then
 			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\misseffect.blp')
 		end
+		if currentSpec == SPEC.FROST and dstGUID == Target.guid and Target.freezable == '?' then
+			if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
+				if castedAbility == Chilled or castedAbility == FrostNova or castedAbility == IceNova or castedAbility == Freeze or castedAbility == ConeOfCold or castedAbility == GlacialSpike then
+					Target.freezable = true
+				end
+			elseif eventType == 'SPELL_MISSED' and extraType == 'IMMUNE' then
+				if castedAbility == Freeze then
+					Target.freezable = false
+				end
+			end
+		end
 	end
 	if castedAbility.aura_targets then
 		if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
@@ -1518,6 +1814,7 @@ local function UpdateTargetInfo()
 		Target.guid = nil
 		Target.boss = false
 		Target.hostile = true
+		Target.freezable = '?'
 		local i
 		for i = 1, #Target.healthArray do
 			Target.healthArray[i] = 0
@@ -1531,6 +1828,7 @@ local function UpdateTargetInfo()
 	end
 	if guid ~= Target.guid then
 		Target.guid = guid
+		Target.freezable = '?'
 		local i
 		for i = 1, #Target.healthArray do
 			Target.healthArray[i] = UnitHealth('target')
