@@ -1166,6 +1166,10 @@ actions+=/call_action_list,name=single
 end
 
 APL[SPEC.FROST].cooldowns = function(self)
+	-- Let's not waste a shatter with a cooldown's GCD
+	if Ebonbolt:previous() or (GlacialSpike:previous() and BrainFreeze:up()) then
+		return
+	end
 --[[
 actions.cooldowns=icy_veins
 actions.cooldowns+=/mirror_image
@@ -1288,7 +1292,7 @@ actions.single+=/ice_lance
 		end
 		return CometStorm
 	end
-	if Ebonbolt:usable() then
+	if Ebonbolt:usable() and (Ebonbolt:castTime() + GCD()) < Target.timeToDie then
 		return Ebonbolt
 	end
 	if RayOfFrost:usable() and not FrozenOrb:inFlight() then
@@ -1297,7 +1301,7 @@ actions.single+=/ice_lance
 	if Blizzard:usable() and (FreezingRain:up() or Enemies() > 1) then
 		return Blizzard
 	end
-	if GlacialSpike:usable() and (BrainFreeze:up() or Ebonbolt:previous() or (Enemies() > 1 and SplittingIce.known)) then
+	if GlacialSpike:usable() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie and (BrainFreeze:up() or Ebonbolt:previous() or (Enemies() > 1 and SplittingIce.known)) then
 		return GlacialSpike
 	end
 	if IceNova:usable() then
@@ -1371,10 +1375,10 @@ actions.aoe+=/ice_lance
 	if RayOfFrost:usable() then
 		return RayOfFrost
 	end
-	if Ebonbolt:usable() then
+	if Ebonbolt:usable() and (Ebonbolt:castTime() + GCD()) < Target.timeToDie then
 		return Ebonbolt
 	end
-	if GlacialSpike:usable() then
+	if GlacialSpike:usable() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie then
 		return GlacialSpike
 	end
 --[[
