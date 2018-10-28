@@ -1307,6 +1307,9 @@ actions.single+=/ice_lance
 	if IceNova:usable() then
 		return IceNova
 	end
+	if IceLance:usable() and TargetIsFrozen() and GetNumGroupMembers() <= 3 and not IceLance:previous() then
+		return IceLance
+	end
 	if Flurry:usable() and WintersReach.known and BrainFreeze:down() and WintersReach:up() then
 		return Flurry
 	end
