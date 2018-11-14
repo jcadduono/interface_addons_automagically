@@ -3,12 +3,20 @@ if select(2, UnitClass('player')) ~= 'MAGE' then
 	return
 end
 
+-- copy heavily accessed global functions into local scope for performance
+local GetSpellCooldown = _G.GetSpellCooldown
+local GetSpellCharges = _G.GetSpellCharges
+local GetTime = _G.GetTime
+local UnitCastingInfo = _G.UnitCastingInfo
+local UnitAura = _G.UnitAura
+-- end copy global functions
+
 -- useful functions
 local function startsWith(str, start) -- case insensitive check to see if a string matches the start of another string
 	if type(str) ~= 'string' then
 		return false
 	end
-   return string.lower(str:sub(1, start:len())) == start:lower()
+	return string.lower(str:sub(1, start:len())) == start:lower()
 end
 -- end useful functions
 
@@ -113,33 +121,6 @@ local var = {
 	gcd = 1.5
 }
 
-local targetModes = {
-	[SPEC.NONE] = {
-		{1, ''}
-	},
-	[SPEC.ARCANE] = {
-		{1, ''},
-		{2, '2'},
-		{3, '3'},
-		{4, '4'},
-		{5, '5+'}
-	},
-	[SPEC.FIRE] = {
-		{1, ''},
-		{2, '2'},
-		{3, '3'},
-		{4, '4'},
-		{5, '5+'}
-	},
-	[SPEC.FROST] = {
-		{1, ''},
-		{2, '2'},
-		{3, '3'},
-		{4, '4'},
-		{5, '5+'}
-	}
-}
-
 local amagicPanel = CreateFrame('Frame', 'amagicPanel', UIParent)
 amagicPanel:SetPoint('CENTER', 0, -169)
 amagicPanel:SetFrameStrata('BACKGROUND')
@@ -234,6 +215,51 @@ amagicExtraPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp
 
 -- Start Auto AoE
 
+local targetModes = {
+	[SPEC.NONE] = {
+		{1, ''}
+	},
+	[SPEC.ARCANE] = {
+		{1, ''},
+		{2, '2'},
+		{3, '3'},
+		{4, '4'},
+		{5, '5+'}
+	},
+	[SPEC.FIRE] = {
+		{1, ''},
+		{2, '2'},
+		{3, '3'},
+		{4, '4'},
+		{5, '5+'}
+	},
+	[SPEC.FROST] = {
+		{1, ''},
+		{2, '2'},
+		{3, '3'},
+		{4, '4'},
+		{5, '5+'}
+	}
+}
+
+local function SetTargetMode(mode)
+	targetMode = min(mode, #targetModes[currentSpec])
+	amagicPanel.targets:SetText(targetModes[currentSpec][targetMode][2])
+end
+Automagically_SetTargetMode = SetTargetMode
+
+function ToggleTargetMode()
+	local mode = targetMode + 1
+	SetTargetMode(mode > #targetModes[currentSpec] and 1 or mode)
+end
+Automagically_ToggleTargetMode = ToggleTargetMode
+
+local function ToggleTargetModeReverse()
+	local mode = targetMode - 1
+	SetTargetMode(mode < 1 and #targetModes[currentSpec] or mode)
+end
+Automagically_ToggleTargetModeReverse = ToggleTargetModeReverse
+
 local autoAoe = {
 	abilities = {},
 	targets = {}
@@ -245,12 +271,12 @@ function autoAoe:update()
 		count = count + 1
 	end
 	if count <= 1 then
-		Automagically_SetTargetMode(1)
+		SetTargetMode(1)
 		return
 	end
 	for i = #targetModes[currentSpec], 1, -1 do
 		if count >= targetModes[currentSpec][i][1] then
-			Automagically_SetTargetMode(i)
+			SetTargetMode(i)
 			return
 		end
 	end
@@ -1290,7 +1316,7 @@ actions.single+=/ice_lance
 		if Freeze:usable() and not TargetIsFrozen() then
 			UseExtra(Freeze)
 		end
-		return CometStorm
+		UseCooldown(CometStorm)
 	end
 	if Ebonbolt:usable() and (Ebonbolt:castTime() + GCD()) < Target.timeToDie then
 		return Ebonbolt
@@ -1556,21 +1582,6 @@ local function Disappear()
 	var.interrupt = nil
 	var.extra, var.last_extra = nil
 	UpdateGlows()
-end
-
-function Automagically_ToggleTargetMode()
-	local mode = targetMode + 1
-	Automagically_SetTargetMode(mode > #targetModes[currentSpec] and 1 or mode)
-end
-
-function Automagically_ToggleTargetModeReverse()
-	local mode = targetMode - 1
-	Automagically_SetTargetMode(mode < 1 and #targetModes[currentSpec] or mode)
-end
-
-function Automagically_SetTargetMode(mode)
-	targetMode = min(mode, #targetModes[currentSpec])
-	amagicPanel.targets:SetText(targetModes[currentSpec][targetMode][2])
 end
 
 function Equipped(name, slot)
@@ -1963,7 +1974,7 @@ function events:PLAYER_REGEN_ENABLED()
 		for guid in next, autoAoe.targets do
 			autoAoe.targets[guid] = nil
 		end
-		Automagically_SetTargetMode(1)
+		SetTargetMode(1)
 	end
 	if var.last_ability then
 		var.last_ability = nil
@@ -1997,7 +2008,7 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		amagicPreviousPanel.ability = nil
 		PreviousGCD = {}
 		currentSpec = GetSpecialization() or 0
-		Automagically_SetTargetMode(1)
+		SetTargetMode(1)
 		UpdateTargetInfo()
 	end
 end
@@ -2018,11 +2029,11 @@ end
 amagicPanel.button:SetScript('OnClick', function(self, button, down)
 	if down then
 		if button == 'LeftButton' then
-			Automagically_ToggleTargetMode()
+			ToggleTargetMode()
 		elseif button == 'RightButton' then
-			Automagically_ToggleTargetModeReverse()
+			ToggleTargetModeReverse()
 		elseif button == 'MiddleButton' then
-			Automagically_SetTargetMode(1)
+			SetTargetMode(1)
 		end
 	end
 end)
@@ -2224,7 +2235,7 @@ function SlashCmdList.Automagically(msg, editbox)
 	if msg[1] == 'aoe' then
 		if msg[2] then
 			Opt.aoe = msg[2] == 'on'
-			Automagically_SetTargetMode(1)
+			SetTargetMode(1)
 			UpdateDraggable()
 		end
 		return print('Automagically - Allow clicking main ability icon to toggle amount of targets (disables moving): ' .. (Opt.aoe and '|cFF00C000On' or '|cFFC00000Off'))
