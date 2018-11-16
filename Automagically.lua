@@ -686,11 +686,86 @@ Shimmer.triggers_gcd = false
 ------ Procs
 
 ---- Fire
-
+local BlazingBarrier = Ability.add(235313, true, true)
+BlazingBarrier.mana_cost = 3
+BlazingBarrier.buff_duration = 60
+BlazingBarrier.cooldown_duration = 25
+local Combustion = Ability.add(190319, true, true)
+Combustion.mana_cost = 10
+Combustion.buff_duration = 10
+Combustion.cooldown_duration = 120
+Combustion.triggers_gcd = false
+local DragonsBreath = Ability.add(31661, false, true)
+DragonsBreath.mana_cost = 4
+DragonsBreath.buff_duration = 4
+DragonsBreath.cooldown_duration = 20
+DragonsBreath:setAutoAoe(true)
+local Fireball = Ability.add(133, false, true)
+Fireball.mana_cost = 2
+Fireball:setVelocity(45)
+local FireBlast = Ability.add(108853, false, true)
+FireBlast.mana_cost = 1
+FireBlast.cooldown_duration = 12
+FireBlast.hasted_cooldown = true
+FireBlast.requires_charge = true
+FireBlast.triggers_gcd = false
+local Flamestrike = Ability.add(2120, false, true)
+Flamestrike.mana_cost = 2.5
+Flamestrike.buff_duration = 8
+Flamestrike:setAutoAoe(true)
+local Ignite = Ability.add(12654, false, true)
+Ignite.buff_duration = 9
+Ignite.tick_interval = 1
+local Pyroblast = Ability.add(11366, false, true)
+Pyroblast.mana_cost = 2
+Pyroblast:setVelocity(35)
+local Scorch = Ability.add(2948, false, true)
+Scorch.mana_cost = 1
 ------ Talents
-
+local AlexstraszasFury = Ability.add(235870, false, true)
+local BlastWave = Ability.add(157981, false, true)
+BlastWave.buff_duration = 4
+BlastWave.cooldown_duration = 25
+local Conflagration = Ability.add(205023, false, true, 226757)
+Conflagration.buff_duration = 8
+Conflagration.tick_interval = 2
+Conflagration.hasted_ticks = true
+local Firestarter = Ability.add(205026, false, true)
+local FlameOn = Ability.add(205029, false, true)
+local FlamePatch = Ability.add(205037, false, true, 205472)
+local Kindling = Ability.add(155148, false, true)
+local LivingBomb = Ability.add(44457, false, true, 217694)
+LivingBomb.buff_duration = 4
+LivingBomb.mana_cost = 1.5
+LivingBomb.cooldown_duration = 12
+LivingBomb.tick_interval = 1
+LivingBomb.hasted_duration = true
+LivingBomb.hasted_cooldown = true
+LivingBomb.hasted_ticks = true
+LivingBomb.explosion = Ability.add(44461, false, true)
+LivingBomb.explosion:setAutoAoe(true)
+LivingBomb.spread = Ability.add(44461, false, true)
+LivingBomb.spread.buff_duration = 4
+LivingBomb.spread.tick_interval = 1
+LivingBomb.spread.hasted_duration = true
+LivingBomb.spread.hasted_ticks = true
+local Meteor = Ability.add(153561, false, true, 153564)
+Meteor.mana_cost = 1
+Meteor.buff_duration = 8
+Meteor.cooldown_duration = 45
+Meteor:setAutoAoe(true)
+local PhoenixFlames = Ability.add(257541, false, true, 257542)
+PhoenixFlames.cooldown_duration = 30
+PhoenixFlames.requires_charge = true
+PhoenixFlames:setVelocity(50)
+PhoenixFlames:setAutoAoe(true)
+local Pyroclasm = Ability.add(269650, false, true, 269651)
+Pyroclasm.buff_duration = 15
 ------ Procs
-
+local HeatingUp = Ability.add(48107, true, true)
+HeatingUp.buff_duration = 10
+local HotStreak = Ability.add(48108, true, true)
+HotStreak.buff_duration = 15
 ---- Frost
 local Blizzard = Ability.add(190356, false, true, 190357)
 Blizzard.mana_cost = 2.5
@@ -1062,6 +1137,13 @@ function Icicles:stack()
 		count = count + 1
 	end
 	return min(5, count)
+end
+
+function RuneOfPower:remains()
+	if self:down() then
+		return 0
+	end
+	return max((self.last_used or 0) + self.buff_duration - var.time - var.execute_remains, 0)
 end
 
 -- End Ability Modifications
