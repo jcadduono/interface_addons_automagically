@@ -2351,6 +2351,9 @@ local function UpdateTargetInfo()
 			amagicPanel:Show()
 			return true
 		end
+		if Opt.previous and combatStartTime == 0 then
+			amagicPreviousPanel:Hide()
+		end
 		return
 	end
 	if guid ~= Target.guid then
