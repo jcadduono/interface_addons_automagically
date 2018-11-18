@@ -1664,13 +1664,13 @@ actions.cooldowns+=/ancestral_call
 		if Enemies() == 1 and RuneOfPower:fullRechargeTime() < FrozenOrb:cooldown() then
 --[[
 # With Glacial Spike, Rune of Power should be used right before the Glacial Spike combo (i.e. with 5 Icicles and a Brain Freeze). When Ebonbolt is off cooldown, Rune of Power can also be used just with 5 Icicles.
-actions.talent_rop=rune_of_power,if=talent.glacial_spike.enabled&buff.icicles.stack=5&(buff.brain_freeze.react|talent.ebonbolt.enabled&cooldown.ebonbolt.remains<cast_time)
+actions.talent_rop=rune_of_power,if=talent.glacial_spike.enabled&buff.icicles.stack=5&(buff.brain_freeze.remains>cast_time+action.glacial_spike.cast_time|talent.ebonbolt.enabled&cooldown.ebonbolt.remains<cast_time)
 # Without Glacial Spike, Rune of Power should be used before any bigger cooldown (Ebonbolt, Comet Storm, Ray of Frost) or when Rune of Power is about to reach 2 charges.
 actions.talent_rop+=/rune_of_power,if=!talent.glacial_spike.enabled&(talent.ebonbolt.enabled&cooldown.ebonbolt.remains<cast_time|talent.comet_storm.enabled&cooldown.comet_storm.remains<cast_time|talent.ray_of_frost.enabled&cooldown.ray_of_frost.remains<cast_time|charges_fractional>1.9)
 ]]
 			local rop_cast = RuneOfPower:castTime()
 			if GlacialSpike.known then
-				if Icicles:stack() == 5 and (BrainFreeze:up() or (Ebonbolt.known and Ebonbolt:cooldown() < rop_cast)) then
+				if Icicles:stack() == 5 and (BrainFreeze:remains() > (rop_cast + GlacialSpike:castTime()) or (Ebonbolt.known and Ebonbolt:cooldown() < rop_cast)) then
 					return UseCooldown(RuneOfPower)
 				end
 			elseif RuneOfPower:chargesFractional() > 1.9 or (Ebonbolt.known and Ebonbolt:cooldown() < rop_cast) or (CometStorm.known and CometStorm:cooldown() < rop_cast) or (RayOfFrost.known and RayOfFrost:cooldown() < rop_cast) then
@@ -1722,8 +1722,9 @@ actions.single+=/ray_of_frost,if=!action.frozen_orb.in_flight&ground_aoe.frozen_
 # Blizzard is used as low priority filler against 2 targets. When using Freezing Rain, it's a medium gain to use the instant Blizzard even against a single target, especially with low mastery.
 actions.single+=/blizzard,if=cast_time=0|active_enemies>1
 # Glacial Spike is used when there's a Brain Freeze proc active (i.e. only when it can be shattered). This is a small to medium gain in most situations. Low mastery leans towards using it when available. When using Splitting Ice and having another target nearby, it's slightly better to use GS when available, as the second target doesn't benefit from shattering the main target.
-actions.single+=/glacial_spike,if=buff.brain_freeze.react|prev_gcd.1.ebonbolt|active_enemies>1&talent.splitting_ice.enabled
+actions.single+=/glacial_spike,if=buff.brain_freeze.remains>cast_time|prev_gcd.1.ebonbolt|active_enemies>1&talent.splitting_ice.enabled
 actions.single+=/ice_nova
+actions.single+=/flurry,if=buff.brain_freeze.react&active_enemies=1&target.time_to_die<2
 actions.single+=/flurry,if=azerite.winters_reach.enabled&!buff.brain_freeze.react&buff.winters_reach.react
 actions.single+=/frostbolt
 actions.single+=/call_action_list,name=movement
@@ -1767,7 +1768,7 @@ actions.single+=/ice_lance
 	if Blizzard:usable() and (FreezingRain:up() or Enemies() > 1) then
 		return Blizzard
 	end
-	if GlacialSpike:usable() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie and (BrainFreeze:up() or Ebonbolt:previous() or (Enemies() > 1 and SplittingIce.known)) then
+	if GlacialSpike:usable() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie and (BrainFreeze:remains() > GlacialSpike:castTime() or Ebonbolt:previous() or (Enemies() > 1 and SplittingIce.known)) then
 		return GlacialSpike
 	end
 	if IceNova:usable() then
@@ -1776,8 +1777,13 @@ actions.single+=/ice_lance
 	if IceLance:usable() and TargetIsFrozen() and GetNumGroupMembers() <= 3 and not IceLance:previous() then
 		return IceLance
 	end
-	if Flurry:usable() and WintersReach.known and BrainFreeze:down() and WintersReach:up() then
-		return Flurry
+	if Flurry:usable() then
+		if Enemies() == 1 and Target.timeToDie < 2 and BrainFreeze:up() then
+			return Flurry
+		end
+		if WintersReach.known and BrainFreeze:down() and WintersReach:up() then
+			return Flurry
+		end
 	end
 	if Frostbolt:usable() then
 		return Frostbolt
@@ -1810,7 +1816,7 @@ actions.aoe+=/ice_lance,if=buff.fingers_of_frost.react
 # The mage will generally be generating a lot of FoF charges when using the AoE action list. Trying to delay Ray of Frost until there are no FoF charges and no active Frozen Orbs would lead to it not being used at all.
 actions.aoe+=/ray_of_frost
 actions.aoe+=/ebonbolt
-actions.aoe+=/glacial_spike
+actions.aoe+=/glacial_spike,if=cast_time<cooldown.blizzard.remains
 # Using Cone of Cold is mostly DPS neutral with the AoE target thresholds. It only becomes decent gain with roughly 7 or more targets.
 actions.aoe+=/cone_of_cold
 actions.aoe+=/frostbolt
@@ -1847,7 +1853,7 @@ actions.aoe+=/ice_lance
 	if Ebonbolt:usable() and (Ebonbolt:castTime() + GCD()) < Target.timeToDie then
 		return Ebonbolt
 	end
-	if GlacialSpike:usable() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie then
+	if GlacialSpike:usable() and GlacialSpike:castTime() < Blizzard:cooldown() and (GlacialSpike:castTime() + GCD()) < Target.timeToDie then
 		return GlacialSpike
 	end
 --[[
@@ -2430,10 +2436,6 @@ function events:PLAYER_REGEN_ENABLED()
 	end
 end
 
-function events:PLAYER_EQUIPMENT_CHANGED()
-
-end
-
 local function UpdateAbilityData()
 	local _, ability
 	for _, ability in next, abilities do
@@ -2443,6 +2445,11 @@ local function UpdateAbilityData()
 	if SummonWaterElemental.known then
 		Freeze.known = true
 	end
+end
+
+function events:PLAYER_EQUIPMENT_CHANGED()
+	Azerite:update()
+	UpdateAbilityData()
 end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
