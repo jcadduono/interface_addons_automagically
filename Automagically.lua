@@ -1192,7 +1192,7 @@ function HeatingUp:up()
 end
 
 function HotStreak:remains()
-	if Scorch:casting() and SearingTouch:up()  and Ability.up(HeatingUp) and Ability.down(HotStreak) then
+	if Scorch:casting() and SearingTouch:up() and Ability.up(HeatingUp) and not Ability.up(HotStreak) then
 		return self.buff_duration
 	end
 	return Ability.remains(self)
@@ -2465,6 +2465,9 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		currentSpec = GetSpecialization() or 0
 		SetTargetMode(1)
 		UpdateTargetInfo()
+		if currentSpec == SPEC.FIRE then
+			var.combustion_rop_cutoff = 60
+		end
 	end
 end
 
