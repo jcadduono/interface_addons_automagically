@@ -117,6 +117,34 @@ local ItemEquipped = {
 -- Azerite trait API access
 local Azerite = {}
 
+-- base mana for each level
+local BaseMana = {
+	145,        160,    175,    190,    205,    -- 5
+	220,        235,    250,    290,    335,    -- 10
+	390,        445,    510,    580,    735,    -- 15
+	825,        865,    910,    950,    995,    -- 20
+	1060,       1125,   1195,   1405,   1490,   -- 25
+	1555,       1620,   1690,   1760,   1830,   -- 30
+	2110,       2215,   2320,   2425,   2540,   -- 35
+	2615,       2695,   3025,   3110,   3195,   -- 40
+	3270,       3345,   3420,   3495,   3870,   -- 45
+	3940,       4015,   4090,   4170,   4575,   -- 50
+	4660,       4750,   4835,   5280,   5380,   -- 55
+	5480,       5585,   5690,   5795,   6300,   -- 60
+	6420,       6540,   6660,   6785,   6915,   -- 65
+	7045,       7175,   7310,   7915,   8065,   -- 70
+	8215,       8370,   8530,   8690,   8855,   -- 75
+	9020,       9190,   9360,   10100,  10290,  -- 80
+	10485,      10680,  10880,  11085,  11295,  -- 85
+	11505,      11725,  12605,  12845,  13085,  -- 90
+	13330,      13585,  13840,  14100,  14365,  -- 95
+	14635,      15695,  15990,  16290,  16595,  -- 100
+	16910,      17230,  17550,  17880,  18220,  -- 105
+	18560,      18910,  19265,  19630,  20000,  -- 110
+	35985,      42390,  48700,  54545,  59550,  -- 115
+	64700,      68505,  72450,  77400,  100000  -- 120
+}
+
 local var = {
 	gcd = 1.5
 }
@@ -478,7 +506,7 @@ function Ability:stack()
 end
 
 function Ability:cost()
-	return self.mana_cost > 0 and (self.mana_cost / 100 * var.mana_max) or 0
+	return self.mana_cost > 0 and (self.mana_cost / 100 * var.mana_base) or 0
 end
 
 function Ability:charges()
@@ -680,9 +708,38 @@ Shimmer.cooldown_duration = 20
 Shimmer.requires_charge = true
 Shimmer.triggers_gcd = false
 ---- Arcane
-
+local ArcaneBarrage = Ability.add(44425, false, true)
+ArcaneBarrage:setVelocity(25)
+ArcaneBarrage:setAutoAoe(true)
+local ArcaneBlast = Ability.add(30451, false, true)
+ArcaneBlast.mana_cost = 2.75
+local ArcaneExplosion = Ability.add(1449, false, true)
+ArcaneExplosion.mana_cost = 10
+ArcaneExplosion:setAutoAoe(true)
+local ArcaneMissiles = Ability.add(5143, false, true, 7268)
+ArcaneMissiles.mana_cost = 15
+ArcaneBarrage:setVelocity(50)
+local ArcanePower = Ability.add(12042, true, true)
+ArcanePower.buff_duration = 10
+ArcanePower.cooldown_duration = 90
+local Evocation = Ability.add(12051, true, true)
+Evocation.buff_duration = 6
+Evocation.cooldown_duration = 90
+local PrismaticBarrier = Ability.add(235450, true, true)
+PrismaticBarrier.mana_cost = 3
+PrismaticBarrier.buff_duration = 60
+PrismaticBarrier.cooldown_duration = 25
+local PresenceOfMind = Ability.add(205025, true, true)
+PresenceOfMind.cooldown_duraiton = 60
+PresenceOfMind.triggers_gcd = false
 ------ Talents
-
+local ArcaneFamiliar = Ability.add(205022, true, true, 210126)
+ArcaneFamiliar.buff_duration = 3600
+ArcaneFamiliar.cooldown_duration = 10
+local ChargedUp = Ability.add(205032, true, true)
+ChargedUp.cooldown_duration = 40
+local RuleOfThrees = Ability.add(264354, true, true, 264774)
+RuleOfThrees.buff_duration = 15
 ------ Procs
 
 ---- Fire
@@ -993,6 +1050,13 @@ local function ManaTimeToMax()
 	return deficit / var.mana_regen
 end
 
+local function ArcaneCharges()
+	if ArcaneBlast:casting() then
+		return min(4, var.arcane_charges + 1)
+	end
+	return var.arcane_charges
+end
+
 local function GCD()
 	return var.gcd
 end
@@ -1223,6 +1287,9 @@ local function UpdateVars()
 	var.mana_regen = GetPowerRegen()
 	var.mana_max = UnitPowerMax('player', 0)
 	var.mana = min(var.mana_max, floor(UnitPower('player', 0) + (var.mana_regen * var.execute_remains)))
+	if currentSpec == SPEC.ARCANE then
+		var.arcane_charges = UnitPower('player', 16)
+	end
 	var.pet = UnitGUID('pet')
 	var.pet_exists = UnitExists('pet') and not UnitIsDead('pet')
 	Target.health = UnitHealth('target')
@@ -1258,19 +1325,130 @@ local APL = {
 }
 
 APL[SPEC.ARCANE].main = function(self)
+--[[
+# Executed before combat begins. Accepts non-harmful actions only.
+actions.precombat=flask
+actions.precombat+=/food
+actions.precombat+=/augmentation
+actions.precombat+=/arcane_intellect
+actions.precombat+=/summon_arcane_familiar
+# conserve_mana is the mana percentage we want to go down to during conserve. It needs to leave enough room to worst case scenario spam AB only during AP.
+actions.precombat+=/variable,name=conserve_mana,op=set,value=60
+actions.precombat+=/snapshot_stats
+actions.precombat+=/mirror_image
+actions.precombat+=/potion
+actions.precombat+=/arcane_blast
+]]
 	if TimeInCombat() == 0 then
+		var.conserve_mana = 60
+		if ArcaneIntellect:usable() and ArcaneIntellect:remains() < 300 then
+			return ArcaneIntellect
+		end
+		if ArcaneFamiliar:usable() and ArcaneFamiliar:remains() < 300 then
+			return ArcaneFamiliar
+		end
+		if MirrorImage:usable() then
+			UseCooldown(MirrorImage)
+		end
 		if not InArenaOrBattleground() then
 			if Opt.pot and BattlePotionOfIntellect:usable() then
 				UseCooldown(BattlePotionOfIntellect)
 			end
 		end
+		if ArcaneBlast:usable() then
+			return ArcaneBlast
+		end
+	else
+		if ArcaneIntellect:down() and ArcaneIntellect:usable() then
+			UseExtra(ArcaneIntellect)
+		elseif ArcaneFamiliar:usable() and ArcaneFamiliar:down() then
+			UseExtra(ArcaneFamiliar)
+		end
 	end
+--[[
+# Go to Burn Phase when already burning, or when boss will die soon.
+actions+=/call_action_list,name=burn,if=burn_phase|target.time_to_die<variable.average_burn_length
+# Start Burn Phase when Arcane Power is ready and Evocation will be ready (on average) before the burn phase is over. Also make sure we got 4 Arcane Charges, or can get 4 Arcane Charges with Charged Up.
+actions+=/call_action_list,name=burn,if=(cooldown.arcane_power.remains=0&cooldown.evocation.remains<=variable.average_burn_length&(buff.arcane_charge.stack=buff.arcane_charge.max_stack|(talent.charged_up.enabled&cooldown.charged_up.remains=0&buff.arcane_charge.stack<=1)))
+actions+=/call_action_list,name=conserve,if=!burn_phase
+actions+=/call_action_list,name=movement
+]]
+
+end
+
+APL[SPEC.ARCANE].burn = function(self)
+--[[
+# Increment our burn phase counter. Whenever we enter the `burn` actions without being in a burn phase, it means that we are about to start one.
+actions.burn=variable,name=total_burns,op=add,value=1,if=!burn_phase
+actions.burn+=/start_burn_phase,if=!burn_phase
+# End the burn phase when we just evocated.
+actions.burn+=/stop_burn_phase,if=burn_phase&prev_gcd.1.evocation&target.time_to_die>variable.average_burn_length&burn_phase_duration>0
+# Less than 1 instead of equals to 0, because of pre-cast Arcane Blast
+actions.burn+=/charged_up,if=buff.arcane_charge.stack<=1
+actions.burn+=/mirror_image
+actions.burn+=/nether_tempest,if=(refreshable|!ticking)&buff.arcane_charge.stack=buff.arcane_charge.max_stack&buff.rune_of_power.down&buff.arcane_power.down
+# When running Overpowered, and we got a Rule of Threes proc (AKA we got our 4th Arcane Charge via Charged Up), use it before using RoP+AP, because the mana reduction is otherwise largely wasted since the AB was free anyway.
+actions.burn+=/arcane_blast,if=buff.rule_of_threes.up&talent.overpowered.enabled&active_enemies<3
+actions.burn+=/lights_judgment,if=buff.arcane_power.down
+actions.burn+=/rune_of_power,if=!buff.arcane_power.up&(mana.pct>=50|cooldown.arcane_power.remains=0)&(buff.arcane_charge.stack=buff.arcane_charge.max_stack)
+actions.burn+=/berserking
+actions.burn+=/arcane_power
+actions.burn+=/use_items,if=buff.arcane_power.up|target.time_to_die<cooldown.arcane_power.remains
+actions.burn+=/blood_fury
+actions.burn+=/fireblood
+actions.burn+=/ancestral_call
+actions.burn+=/presence_of_mind,if=buff.rune_of_power.remains<=buff.presence_of_mind.max_stack*action.arcane_blast.execute_time|buff.arcane_power.remains<=buff.presence_of_mind.max_stack*action.arcane_blast.execute_time
+actions.burn+=/potion,if=buff.arcane_power.up&(buff.berserking.up|buff.blood_fury.up|!(race.troll|race.orc))
+actions.burn+=/arcane_orb,if=buff.arcane_charge.stack=0|(active_enemies<3|(active_enemies<2&talent.resonance.enabled))
+actions.burn+=/arcane_barrage,if=active_enemies>=3&(buff.arcane_charge.stack=buff.arcane_charge.max_stack)
+actions.burn+=/arcane_explosion,if=active_enemies>=3
+# Ignore Arcane Missiles during Arcane Power, aside from some very specific exceptions, like not having Overpowered talented & running 3x Arcane Pummeling.
+actions.burn+=/arcane_missiles,if=buff.clearcasting.react&active_enemies<3&(talent.amplification.enabled|(!talent.overpowered.enabled&azerite.arcane_pummeling.rank>=2)|buff.arcane_power.down),chain=1
+actions.burn+=/arcane_blast,if=active_enemies<3
+# Now that we're done burning, we can update the average_burn_length with the length of this burn.
+actions.burn+=/variable,name=average_burn_length,op=set,value=(variable.average_burn_length*variable.total_burns-variable.average_burn_length+(burn_phase_duration))%variable.total_burns
+actions.burn+=/evocation,interrupt_if=mana.pct>=85,interrupt_immediate=1
+# For the rare occasion where we go oom before evocation is back up. (Usually because we get very bad rng so the burn is cut very short)
+actions.burn+=/arcane_barrage
+]]
+
+end
+
+APL[SPEC.ARCANE].conserve = function(self)
+--[[
+actions.conserve=mirror_image
+actions.conserve+=/charged_up,if=buff.arcane_charge.stack=0
+actions.conserve+=/nether_tempest,if=(refreshable|!ticking)&buff.arcane_charge.stack=buff.arcane_charge.max_stack&buff.rune_of_power.down&buff.arcane_power.down
+actions.conserve+=/arcane_orb,if=buff.arcane_charge.stack<=2&(cooldown.arcane_power.remains>10|active_enemies<=2)
+# Arcane Blast shifts up in priority when running rule of threes.
+actions.conserve+=/arcane_blast,if=buff.rule_of_threes.up&buff.arcane_charge.stack>3
+actions.conserve+=/rune_of_power,if=buff.arcane_charge.stack=buff.arcane_charge.max_stack&(full_recharge_time<=execute_time|full_recharge_time<=cooldown.arcane_power.remains|target.time_to_die<=cooldown.arcane_power.remains)
+actions.conserve+=/arcane_missiles,if=mana.pct<=95&buff.clearcasting.react&active_enemies<3,chain=1
+# During conserve, we still just want to continue not dropping charges as long as possible.So keep 'burning' as long as possible (aka conserve_mana threshhold) and then swap to a 4x AB->Abarr conserve rotation. If we do not have 4 AC, we can dip slightly lower to get a 4th AC. We also sustain at a higher mana percentage when we plan to use a Rune of Power during conserve phase, so we can burn during the Rune of Power.
+actions.conserve+=/arcane_barrage,if=((buff.arcane_charge.stack=buff.arcane_charge.max_stack)&((mana.pct<=variable.conserve_mana)|(cooldown.arcane_power.remains>cooldown.rune_of_power.full_recharge_time&mana.pct<=variable.conserve_mana+25))|(talent.arcane_orb.enabled&cooldown.arcane_orb.remains<=gcd&cooldown.arcane_power.remains>10))|mana.pct<=(variable.conserve_mana-10)
+# Supernova is barely worth casting, which is why it is so far down, only just above AB. 
+actions.conserve+=/supernova,if=mana.pct<=95
+# Keep 'burning' in aoe situations until conserve_mana pct. After that only cast AE with 3 Arcane charges, since it's almost equal mana cost to a 3 stack AB anyway. At that point AoE rotation will be AB x3->AE->Abarr
+actions.conserve+=/arcane_explosion,if=active_enemies>=3&(mana.pct>=variable.conserve_mana|buff.arcane_charge.stack=3)
+actions.conserve+=/arcane_blast
+actions.conserve+=/arcane_barrage
+]]
+
+end
+
+APL[SPEC.ARCANE].movement = function(self)
+--[[
+actions.movement=shimmer,if=movement.distance>=10
+actions.movement+=/blink,if=movement.distance>=10
+actions.movement+=/presence_of_mind
+actions.movement+=/arcane_missiles
+actions.movement+=/arcane_orb
+actions.movement+=/supernova
+]]
+
 end
 
 APL[SPEC.FIRE].main = function(self)
-	if ArcaneIntellect:down() and ArcaneIntellect:usable() then
-		UseExtra(ArcaneIntellect)
-	end
 --[[
 actions.precombat=flask
 actions.precombat+=/food
@@ -1285,6 +1463,9 @@ actions.precombat+=/pyroblast
 ]]
 	if TimeInCombat() == 0 then
 		var.combustion_rop_cutoff = 60
+		if ArcaneIntellect:usable() and ArcaneIntellect:remains() < 300 then
+			return ArcaneIntellect
+		end
 		if MirrorImage:usable() then
 			UseCooldown(MirrorImage)
 		end
@@ -1295,6 +1476,10 @@ actions.precombat+=/pyroblast
 		end
 		if Pyroblast:usable() then
 			return Pyroblast
+		end
+	else
+		if ArcaneIntellect:down() and ArcaneIntellect:usable() then
+			UseExtra(ArcaneIntellect)
 		end
 	end
 --[[
@@ -1583,11 +1768,6 @@ actions.standard_rotation+=/scorch
 end
 
 APL[SPEC.FROST].main = function(self)
-	if ArcaneIntellect:down() and ArcaneIntellect:usable() then
-		UseExtra(ArcaneIntellect)
-	elseif SummonWaterElemental:usable() then
-		UseExtra(SummonWaterElemental)
-	end
 --[[
 actions.precombat=flask
 actions.precombat+=/food
@@ -1600,6 +1780,12 @@ actions.precombat+=/potion
 actions.precombat+=/frostbolt
 ]]
 	if TimeInCombat() == 0 then
+		if ArcaneIntellect:usable() and ArcaneIntellect:remains() < 300 then
+			return ArcaneIntellect
+		end
+		if SummonWaterElemental:usable() then
+			return SummonWaterElemental
+		end
 		if MirrorImage:usable() then
 			UseCooldown(MirrorImage)
 		end
@@ -1610,6 +1796,12 @@ actions.precombat+=/frostbolt
 		end
 		if Frostbolt:usable() then
 			return Frostbolt
+		end
+	else
+		if ArcaneIntellect:down() and ArcaneIntellect:usable() then
+			UseExtra(ArcaneIntellect)
+		elseif SummonWaterElemental:usable() then
+			UseExtra(SummonWaterElemental)
 		end
 	end
 --[[
@@ -2437,6 +2629,7 @@ function events:PLAYER_REGEN_ENABLED()
 end
 
 local function UpdateAbilityData()
+	var.mana_base = BaseMana[UnitLevel('player')]
 	local _, ability
 	for _, ability in next, abilities do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
@@ -2465,7 +2658,9 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		currentSpec = GetSpecialization() or 0
 		SetTargetMode(1)
 		UpdateTargetInfo()
-		if currentSpec == SPEC.FIRE then
+		if currentSpec == SPEC.ARCANE then
+			var.conserve_mana = 60
+		elseif currentSpec == SPEC.FIRE then
 			var.combustion_rop_cutoff = 60
 		end
 	end
