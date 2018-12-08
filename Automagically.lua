@@ -709,6 +709,8 @@ Shimmer.requires_charge = true
 Shimmer.triggers_gcd = false
 ---- Arcane
 local ArcaneBarrage = Ability.add(44425, false, true)
+ArcaneBarrage.cooldown_duration = 3
+ArcaneBarrage.hasted_cooldown = true
 ArcaneBarrage:setVelocity(25)
 ArcaneBarrage:setAutoAoe(true)
 local ArcaneBlast = Ability.add(30451, false, true)
@@ -718,7 +720,7 @@ ArcaneExplosion.mana_cost = 10
 ArcaneExplosion:setAutoAoe(true)
 local ArcaneMissiles = Ability.add(5143, false, true, 7268)
 ArcaneMissiles.mana_cost = 15
-ArcaneBarrage:setVelocity(50)
+ArcaneMissiles:setVelocity(50)
 local ArcanePower = Ability.add(12042, true, true)
 ArcanePower.buff_duration = 10
 ArcanePower.cooldown_duration = 90
@@ -730,18 +732,36 @@ PrismaticBarrier.mana_cost = 3
 PrismaticBarrier.buff_duration = 60
 PrismaticBarrier.cooldown_duration = 25
 local PresenceOfMind = Ability.add(205025, true, true)
-PresenceOfMind.cooldown_duraiton = 60
+PresenceOfMind.cooldown_duration = 60
 PresenceOfMind.triggers_gcd = false
 ------ Talents
+local Amplification = Ability.add(236628, false, true)
 local ArcaneFamiliar = Ability.add(205022, true, true, 210126)
 ArcaneFamiliar.buff_duration = 3600
 ArcaneFamiliar.cooldown_duration = 10
+local ArcaneOrb = Ability.add(153626, false, true, 153640)
+ArcaneOrb.mana_cost = 1
+ArcaneOrb.cooldown_duration = 20
+ArcaneOrb:setAutoAoe(true)
 local ChargedUp = Ability.add(205032, true, true)
 ChargedUp.cooldown_duration = 40
+local NetherTempest = Ability.add(114923, false, true, 114954)
+NetherTempest.mana_cost = 1.5
+NetherTempest.buff_duration = 12
+NetherTempest.tick_interval = 1
+NetherTempest.hasted_ticks = true
+NetherTempest:setAutoAoe(true)
+local Overpowered = Ability.add(155147, false, true)
+local Resonance = Ability.add(205028, false, true)
 local RuleOfThrees = Ability.add(264354, true, true, 264774)
 RuleOfThrees.buff_duration = 15
+local Slipstream = Ability.add(236457, false, true)
+local Supernova = Ability.add(157980, false, true)
+Supernova.cooldown_duration = 25
+Supernova:setAutoAoe(true)
 ------ Procs
-
+local Clearcasting = Ability.add(263725, true, true)
+Clearcasting.buff_duration = 15
 ---- Fire
 local BlazingBarrier = Ability.add(235313, true, true)
 BlazingBarrier.mana_cost = 3
@@ -917,6 +937,8 @@ Icicles.buff_duration = 60
 local WintersChill = Ability.add(228358, false, true)
 WintersChill.buff_duration = 1
 -- Azerite Traits
+local ArcanePummeling = Ability.add(270669, true, true, 270670)
+ArcanePummeling.buff_duration = 3
 local Preheat = Ability.add(273331, true, true, 273333)
 Preheat.buff_duration = 30
 local WintersReach = Ability.add(273346, true, true, 273347)
@@ -1030,8 +1052,8 @@ local function Mana()
 	return var.mana
 end
 
-local function ManaDeficit()
-	return var.mana_max - var.mana
+local function ManaPct()
+	return var.mana / var.mana_max * 100
 end
 
 local function ManaRegen()
@@ -1131,6 +1153,52 @@ end
 
 -- Start Ability Modifications
 
+function Ability:cost()
+	if self.mana_cost == 0 then
+		return 0
+	end
+	local cost = self.mana_cost / 100 * var.mana_base
+	if ArcanePower.known and ArcanePower:up() then
+		cost = cost - cost * 0.60
+	end
+	return cost
+end
+
+function ArcaneBlast:cost()
+	if Ability.up(RuleOfThrees) then
+		return 0
+	end
+	return Ability.cost(self) * (ArcaneCharges() + 1)
+end
+
+function ArcaneExplosion:cost()
+	if Clearcasting:up() then
+		return 0
+	end
+	return Ability.cost(self)
+end
+
+function ArcaneMissiles:cost()
+	if RuleOfThrees:up() or Clearcasting:up() then
+		return 0
+	end
+	return Ability.cost(self)
+end
+
+function RuleOfThrees:up()
+	if ArcaneBlast:casting() then
+		return false
+	end
+	return Ability.up(self)
+end
+
+function PresenceOfMind:cooldown()
+	if self:up() then
+		return self.cooldown_duration
+	end
+	return Ability.cooldown(self)
+end
+
 function SummonWaterElemental:usable()
 	if (UnitExists('pet') and not UnitIsDead('pet')) or IsFlying() then
 		return false
@@ -1213,10 +1281,17 @@ function Icicles:stack()
 end
 
 function RuneOfPower:remains()
+	if self:casting() then
+		return self.buff_duration
+	end
 	if self:down() then
 		return 0
 	end
 	return max((self.last_used or 0) + self.buff_duration - var.time - var.execute_remains, 0)
+end
+
+function RuneOfPower:up()
+	return self:casting() or Ability.up(self)
 end
 
 function Firestarter:remains()
@@ -1285,8 +1360,11 @@ local function UpdateVars()
 	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
 	var.gcd = 1.5 * var.haste_factor
 	var.mana_regen = GetPowerRegen()
-	var.mana_max = UnitPowerMax('player', 0)
-	var.mana = min(var.mana_max, floor(UnitPower('player', 0) + (var.mana_regen * var.execute_remains)))
+	var.mana = UnitPower('player', 0) + (var.mana_regen * var.execute_remains)
+	if var.ability_casting then
+		var.mana = var.mana - var.ability_casting:cost()
+	end
+	var.mana = min(max(var.mana, 0), var.mana_max)
 	if currentSpec == SPEC.ARCANE then
 		var.arcane_charges = UnitPower('player', 16)
 	end
@@ -1340,7 +1418,6 @@ actions.precombat+=/potion
 actions.precombat+=/arcane_blast
 ]]
 	if TimeInCombat() == 0 then
-		var.conserve_mana = 60
 		if ArcaneIntellect:usable() and ArcaneIntellect:remains() < 300 then
 			return ArcaneIntellect
 		end
@@ -1373,7 +1450,23 @@ actions+=/call_action_list,name=burn,if=(cooldown.arcane_power.remains=0&cooldow
 actions+=/call_action_list,name=conserve,if=!burn_phase
 actions+=/call_action_list,name=movement
 ]]
-
+	local apl
+	if var.burn_phase or (Target.boss and Target.timeToDie < var.average_burn_length) then
+		apl = self:burn()
+		if apl then return apl end
+	end
+	if ArcanePower:ready() and Evocation:ready(max(var.average_burn_length, 20)) and (ArcaneCharges() == 4 or (ChargedUp.known and ChargedUp:ready() and ArcaneCharges() <= 1)) then
+		apl = self:burn()
+		if apl then return apl end
+	end
+	if not var.burn_phase then
+		if (Evocation:usable() and ManaPct() < 25) or (Evocation:channeling() and ManaPct() < 85) then
+			return Evocation
+		end
+		apl = self:conserve()
+		if apl then return apl end
+	end
+	return self:movement()
 end
 
 APL[SPEC.ARCANE].burn = function(self)
@@ -1392,7 +1485,7 @@ actions.burn+=/arcane_blast,if=buff.rule_of_threes.up&talent.overpowered.enabled
 actions.burn+=/lights_judgment,if=buff.arcane_power.down
 actions.burn+=/rune_of_power,if=!buff.arcane_power.up&(mana.pct>=50|cooldown.arcane_power.remains=0)&(buff.arcane_charge.stack=buff.arcane_charge.max_stack)
 actions.burn+=/berserking
-actions.burn+=/arcane_power
+actions.burn+=/arcane_power,if=buff.rune_of_power.up
 actions.burn+=/use_items,if=buff.arcane_power.up|target.time_to_die<cooldown.arcane_power.remains
 actions.burn+=/blood_fury
 actions.burn+=/fireblood
@@ -1411,7 +1504,70 @@ actions.burn+=/evocation,interrupt_if=mana.pct>=85,interrupt_immediate=1
 # For the rare occasion where we go oom before evocation is back up. (Usually because we get very bad rng so the burn is cut very short)
 actions.burn+=/arcane_barrage
 ]]
-
+	if var.burn_phase then
+		var.burn_phase_duration = var.time - var.burn_phase
+		if Evocation:previous() and Target.timeToDie > var.average_burn_length and var.burn_phase_duration > 0 then
+			var.burn_phase = false
+			var.average_burn_length = (var.average_burn_length * (var.total_burns - 1) + var.burn_phase_duration) / var.total_burns
+			return
+		end
+	else
+		var.burn_phase = var.time
+		var.burn_phase_duration = 0
+		var.total_burns = var.total_burns + 1
+	end
+	if ChargedUp:usable() and ArcaneCharges() <= 1 then
+		UseCooldown(ChargedUp)
+	end
+	if MirrorImage:usable() then
+		UseCooldown(MirrorImage)
+	end
+	if NetherTempest:usable() and NetherTempest:refreshable() and ArcaneCharges() == 4 and not (RuneOfPower:up() and ArcanePower:up()) then
+		return NetherTempest
+	end
+	if RuleOfThrees.known and Overpowered.known and Enemies() < 3 and ArcaneBlast:usable() and RuleOfThrees:up() then
+		return ArcaneBlast
+	end
+--[[
+	if LightsJudgment:usable() and ArcanePower:down() then
+		UseExtra(LightsJudgment)
+	end
+]]
+	if RuneOfPower:usable() and RuneOfPower:down() and ArcanePower:down() and (ManaPct() >= 50 or ArcanePower:ready()) and ArcaneCharges() == 4 then
+		UseCooldown(RuneOfPower)
+	end
+	if ArcanePower:usable() and RuneOfPower:remains() > 6 then
+		UseCooldown(ArcanePower)
+	end
+	if PresenceOfMind:usable() and (RuneOfPower:remains() <= (2 * ArcaneBlast:castTime()) or ArcanePower:remains() <= (2 * ArcaneBlast:castTime())) then
+		UseCooldown(PresenceOfMind)
+	end
+	if Opt.pot and BattlePotionOfIntellect:usable() and ArcanePower:up() then
+		UseExtra(BattlePotionOfIntellect)
+	end
+	if ArcaneOrb:usable() and (ArcaneCharges() == 0 or Enemies() < (Resonance.known and 2 or 3)) then
+		UseCooldown(ArcaneOrb)
+	end
+	if ArcaneBarrage:usable() and Enemies() >= 3 and ArcaneCharges() == 4 then
+		return ArcaneBarrage
+	end
+	if ArcaneExplosion:usable() and Enemies() >= 3 then
+		return ArcaneExplosion
+	end
+	if ArcaneMissiles:usable() and Clearcasting:up() and Enemies() < 3 and (Amplification.known or (not Overpowered.known and ArcanePummeling:azeriteRank() >= 2) or ArcanePower:down()) then
+		return ArcaneMissiles
+	end
+	if ArcaneBlast:usable() and Enemies() < 3 then
+		return ArcaneBlast
+	end
+	var.burn_phase = false
+	var.average_burn_length = (var.average_burn_length * (var.total_burns - 1) + var.burn_phase_duration) / var.total_burns
+	if Evocation:usable() then
+		return Evocation
+	end
+	if ArcaneBarrage:usable() then
+		return ArcaneBarrage
+	end
 end
 
 APL[SPEC.ARCANE].conserve = function(self)
@@ -1425,15 +1581,54 @@ actions.conserve+=/arcane_blast,if=buff.rule_of_threes.up&buff.arcane_charge.sta
 actions.conserve+=/rune_of_power,if=buff.arcane_charge.stack=buff.arcane_charge.max_stack&(full_recharge_time<=execute_time|full_recharge_time<=cooldown.arcane_power.remains|target.time_to_die<=cooldown.arcane_power.remains)
 actions.conserve+=/arcane_missiles,if=mana.pct<=95&buff.clearcasting.react&active_enemies<3,chain=1
 # During conserve, we still just want to continue not dropping charges as long as possible.So keep 'burning' as long as possible (aka conserve_mana threshhold) and then swap to a 4x AB->Abarr conserve rotation. If we do not have 4 AC, we can dip slightly lower to get a 4th AC. We also sustain at a higher mana percentage when we plan to use a Rune of Power during conserve phase, so we can burn during the Rune of Power.
-actions.conserve+=/arcane_barrage,if=((buff.arcane_charge.stack=buff.arcane_charge.max_stack)&((mana.pct<=variable.conserve_mana)|(cooldown.arcane_power.remains>cooldown.rune_of_power.full_recharge_time&mana.pct<=variable.conserve_mana+25))|(talent.arcane_orb.enabled&cooldown.arcane_orb.remains<=gcd&cooldown.arcane_power.remains>10))|mana.pct<=(variable.conserve_mana-10)
+actions.conserve+=/arcane_barrage,if=((buff.rune_of_power.remains<action.arcane_blast.execute_time&buff.arcane_charge.stack=buff.arcane_charge.max_stack)&((mana.pct<=variable.conserve_mana)|(cooldown.arcane_power.remains>cooldown.rune_of_power.full_recharge_time&mana.pct<=variable.conserve_mana+25))|(talent.arcane_orb.enabled&cooldown.arcane_orb.remains<=gcd&cooldown.arcane_power.remains>10))|mana.pct<=(variable.conserve_mana-10)
 # Supernova is barely worth casting, which is why it is so far down, only just above AB. 
 actions.conserve+=/supernova,if=mana.pct<=95
+actions.conserve+=/arcane_barrage,if=active_enemies>=3&buff.arcane_charge.stack=buff.arcane_charge.max_stack
 # Keep 'burning' in aoe situations until conserve_mana pct. After that only cast AE with 3 Arcane charges, since it's almost equal mana cost to a 3 stack AB anyway. At that point AoE rotation will be AB x3->AE->Abarr
 actions.conserve+=/arcane_explosion,if=active_enemies>=3&(mana.pct>=variable.conserve_mana|buff.arcane_charge.stack=3)
 actions.conserve+=/arcane_blast
 actions.conserve+=/arcane_barrage
 ]]
-
+	if MirrorImage:usable() then
+		UseCooldown(MirrorImage)
+	end
+	if ChargedUp:usable() and ArcaneCharges() == 0 then
+		UseCooldown(ChargedUp)
+	end
+	if NetherTempest:usable() and NetherTempest:refreshable() and ArcaneCharges() == 4 and not (RuneOfPower:up() and ArcanePower:up()) then
+		return NetherTempest
+	end
+	if ArcaneOrb:usable() and ArcaneCharges() <= 2 and (ArcanePower:cooldown() > 10 or Enemies() <= 2) then
+		UseCooldown(ArcaneOrb)
+	end
+	if RuleOfThrees.known and ArcaneBlast:usable() and ArcaneCharges() > 3 and RuleOfThrees:up() then
+		return ArcaneBlast
+	end
+	if RuneOfPower:usable() and RuneOfPower:down() and ArcaneCharges() == 4 and (RuneOfPower:fullRechargeTime() <= RuneOfPower:castTime() or RuneOfPower:fullRechargeTime() <= ArcanePower:cooldown() or Target.timeToDie <= ArcanePower:cooldown()) then
+		UseCooldown(RuneOfPower)
+	end
+	if ArcaneMissiles:usable() and ManaPct() <= 95 and Clearcasting:up() and Enemies() < 3 then
+		return ArcaneMissiles
+	end
+	if ArcaneBarrage:usable() and (ManaPct() <= (var.conserve_mana - 10) or (ArcaneCharges() == 4 and RuneOfPower:remains() < ArcaneBlast:castTime() and (ManaPct() <= var.conserve_mana or (ArcanePower:cooldown() > RuneOfPower:fullRechargeTime() and ManaPct() <= var.conserve_mana + 25))) or (ArcaneOrb.known and ArcaneOrb:ready(GCD()) and not ArcanePower:ready(10))) then
+		return ArcaneBarrage
+	end
+	if Supernova:usable() and ManaPct() <= 95 then
+		UseCooldown(Supernova)
+	end
+	if ArcaneBarrage:usable() and Enemies() >= 3 and ArcaneCharges() == 4 then
+		return ArcaneBarrage
+	end
+	if ArcaneExplosion:usable() and Enemies() >= 3 and (ManaPct() >= var.conserve_mana or ArcaneCharges() == 3) then
+		return ArcaneExplosion
+	end
+	if ArcaneBlast:usable() then
+		return ArcaneBlast
+	end
+	if ArcaneBarrage:usable() then
+		return ArcaneBarrage
+	end
 end
 
 APL[SPEC.ARCANE].movement = function(self)
@@ -1445,7 +1640,23 @@ actions.movement+=/arcane_missiles
 actions.movement+=/arcane_orb
 actions.movement+=/supernova
 ]]
-
+	if Blink:usable() then
+		UseExtra(Blink)
+	elseif Shimmer:usable() then
+		UseExtra(Shimmer)
+	end
+	if PresenceOfMind:usable() then
+		UseCooldown(PresenceOfMind)
+	end
+	if Slipstream.known and ArcaneMissiles:usable() and Clearcasting:up() then
+		return ArcaneMissiles
+	end
+	if ArcaneOrb:usable() then
+		UseCooldown(ArcaneOrb)
+	end
+	if Supernova:usable() then
+		UseCooldown(Supernova)
+	end
 end
 
 APL[SPEC.FIRE].main = function(self)
@@ -2626,10 +2837,20 @@ function events:PLAYER_REGEN_ENABLED()
 		var.last_ability = nil
 		amagicPreviousPanel:Hide()
 	end
+	if currentSpec == SPEC.ARCANE then
+		var.conserve_mana = 60
+		var.burn_phase = false
+		var.burn_phase_duration = 0
+		var.total_burns = 0
+		var.average_burn_length = 0
+	elseif currentSpec == SPEC.FIRE then
+		var.combustion_rop_cutoff = 60
+	end
 end
 
 local function UpdateAbilityData()
 	var.mana_base = BaseMana[UnitLevel('player')]
+	var.mana_max = UnitPowerMax('player', 0)
 	local _, ability
 	for _, ability in next, abilities do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
@@ -2658,11 +2879,7 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		currentSpec = GetSpecialization() or 0
 		SetTargetMode(1)
 		UpdateTargetInfo()
-		if currentSpec == SPEC.ARCANE then
-			var.conserve_mana = 60
-		elseif currentSpec == SPEC.FIRE then
-			var.combustion_rop_cutoff = 60
-		end
+		events:PLAYER_REGEN_ENABLED()
 	end
 end
 
@@ -2698,7 +2915,9 @@ amagicPanel:SetScript('OnUpdate', function(self, elapsed)
 		if Opt.auto_aoe then
 			local _, ability
 			for _, ability in next, autoAoe.abilities do
-				ability:updateTargetsHit()
+				if ability.known then
+					ability:updateTargetsHit()
+				end
 			end
 			autoAoe:purge()
 		end
