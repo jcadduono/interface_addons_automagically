@@ -163,7 +163,7 @@ amagicPanel.border:SetAllPoints(amagicPanel)
 amagicPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
 amagicPanel.border:Hide()
 amagicPanel.text = amagicPanel:CreateFontString(nil, 'OVERLAY')
-amagicPanel.text:SetFont('Fonts\\FRIZQT__.TTF', 14, 'OUTLINE')
+amagicPanel.text:SetFont('Fonts\\FRIZQT__.TTF', 10, 'OUTLINE')
 amagicPanel.text:SetTextColor(1, 1, 1, 1)
 amagicPanel.text:SetAllPoints(amagicPanel)
 amagicPanel.text:SetJustifyH('CENTER')
@@ -1469,6 +1469,17 @@ actions+=/call_action_list,name=movement
 	return self:movement()
 end
 
+APL[SPEC.ARCANE].toggle_burn_phase = function(self, on)
+	if on and not var.burn_phase then
+		var.burn_phase = var.time
+		var.burn_phase_duration = 0
+		var.total_burns = var.total_burns + 1
+	elseif not on and var.burn_phase then
+		var.burn_phase = false
+		var.average_burn_length = (var.average_burn_length * (var.total_burns - 1) + var.burn_phase_duration) / var.total_burns
+	end
+end
+
 APL[SPEC.ARCANE].burn = function(self)
 --[[
 # Increment our burn phase counter. Whenever we enter the `burn` actions without being in a burn phase, it means that we are about to start one.
@@ -1507,14 +1518,11 @@ actions.burn+=/arcane_barrage
 	if var.burn_phase then
 		var.burn_phase_duration = var.time - var.burn_phase
 		if Evocation:previous() and Target.timeToDie > var.average_burn_length and var.burn_phase_duration > 0 then
-			var.burn_phase = false
-			var.average_burn_length = (var.average_burn_length * (var.total_burns - 1) + var.burn_phase_duration) / var.total_burns
+			self:toggle_burn_phase(false)
 			return
 		end
 	else
-		var.burn_phase = var.time
-		var.burn_phase_duration = 0
-		var.total_burns = var.total_burns + 1
+		self:toggle_burn_phase(true)
 	end
 	if ChargedUp:usable() and ArcaneCharges() <= 1 then
 		UseCooldown(ChargedUp)
@@ -1560,8 +1568,7 @@ actions.burn+=/arcane_barrage
 	if ArcaneBlast:usable() and Enemies() < 3 then
 		return ArcaneBlast
 	end
-	var.burn_phase = false
-	var.average_burn_length = (var.average_burn_length * (var.total_burns - 1) + var.burn_phase_duration) / var.total_burns
+	self:toggle_burn_phase(false)
 	if Evocation:usable() then
 		return Evocation
 	end
@@ -2423,6 +2430,7 @@ local function Disappear()
 	amagicPanel:Hide()
 	amagicPanel.icon:Hide()
 	amagicPanel.border:Hide()
+	amagicPanel.text:Hide()
 	amagicCooldownPanel:Hide()
 	amagicInterruptPanel:Hide()
 	amagicExtraPanel:Hide()
@@ -2615,6 +2623,10 @@ local function UpdateCombat()
 	if Opt.interrupt then
 		UpdateInterrupt()
 	end
+	if currentSpec == SPEC.ARCANE then
+		amagicPanel.text:SetText(var.burn_phase and 'BURN' or 'CONSERVE')
+		amagicPanel.text:Show()
+	end
 	UpdateGlows()
 end
 
@@ -2702,6 +2714,13 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
 			amagicPreviousPanel.icon:SetTexture(castedAbility.icon)
 			amagicPreviousPanel:Show()
+		end
+		if currentSpec == SPEC.ARCANE then
+			if castedAbility == ArcanePower then
+				APL[SPEC.ARCANE]:toggle_burn_phase(true)
+			elseif castedAbility == Evocation then
+				APL[SPEC.ARCANE]:toggle_burn_phase(false)
+			end
 		end
 		return
 	end
