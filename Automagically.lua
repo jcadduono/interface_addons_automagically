@@ -83,6 +83,7 @@ local function InitializeVariables()
 		auto_aoe = false,
 		auto_aoe_ttl = 10,
 		pot = false,
+		conserve_mana = 60,
 	})
 end
 
@@ -1618,7 +1619,7 @@ actions.conserve+=/arcane_barrage
 	if ArcaneMissiles:usable() and ManaPct() <= 95 and Clearcasting:up() and Enemies() < 3 then
 		return ArcaneMissiles
 	end
-	if ArcaneBarrage:usable() and (ManaPct() <= (var.conserve_mana - 10) or (ArcaneCharges() == 4 and RuneOfPower:remains() < ArcaneBlast:castTime() and (ManaPct() <= var.conserve_mana or (ArcanePower:cooldown() > RuneOfPower:fullRechargeTime() and ManaPct() <= var.conserve_mana + 25))) or (ArcaneOrb.known and ArcaneOrb:ready(GCD()) and not ArcanePower:ready(10))) then
+	if ArcaneBarrage:usable() and (ManaPct() <= (Opt.conserve_mana - 10) or (ArcaneCharges() == 4 and RuneOfPower:remains() < ArcaneBlast:castTime() and (ManaPct() <= Opt.conserve_mana or (ArcanePower:cooldown() > RuneOfPower:fullRechargeTime() and ManaPct() <= Opt.conserve_mana + 25))) or (ArcaneOrb.known and ArcaneOrb:ready(GCD()) and not ArcanePower:ready(10))) then
 		return ArcaneBarrage
 	end
 	if Supernova:usable() and ManaPct() <= 95 then
@@ -1627,7 +1628,7 @@ actions.conserve+=/arcane_barrage
 	if ArcaneBarrage:usable() and Enemies() >= 3 and ArcaneCharges() == 4 then
 		return ArcaneBarrage
 	end
-	if ArcaneExplosion:usable() and Enemies() >= 3 and (ManaPct() >= var.conserve_mana or ArcaneCharges() == 3) then
+	if ArcaneExplosion:usable() and Enemies() >= 3 and (ManaPct() >= Opt.conserve_mana or ArcaneCharges() == 3) then
 		return ArcaneExplosion
 	end
 	if ArcaneBlast:usable() then
@@ -2857,7 +2858,6 @@ function events:PLAYER_REGEN_ENABLED()
 		amagicPreviousPanel:Hide()
 	end
 	if currentSpec == SPEC.ARCANE then
-		var.conserve_mana = 60
 		var.burn_phase = false
 		var.burn_phase_duration = 0
 		var.total_burns = 0
@@ -3181,6 +3181,12 @@ function SlashCmdList.Automagically(msg, editbox)
 		end
 		return print('Automagically - Show Battle potions in cooldown UI: ' .. (Opt.pot and '|cFF00C000On' or '|cFFC00000Off'))
 	end
+	if startsWith(msg[1], 'con') then
+		if msg[2] then
+			Opt.conserve_mana = max(min(tonumber(msg[2]) or 60, 80), 20)
+		end
+		return print('Automagically - Mana conservation threshold (Arcane): |cFFFFD000' .. Opt.conserve_mana .. '%|r')
+	end
 	if msg[1] == 'reset' then
 		amagicPanel:ClearAllPoints()
 		amagicPanel:SetPoint('CENTER', 0, -169)
@@ -3210,6 +3216,7 @@ function SlashCmdList.Automagically(msg, editbox)
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show Battle potions in cooldown UI',
+		'conserve |cFFFFD000[20-80]|r  - mana conservation threshold (arcane, default is 60%)',
 		'|cFFFFD000reset|r - reset the location of the Automagically UI to default',
 	} do
 		print('  ' .. SLASH_Automagically1 .. ' ' .. cmd)
