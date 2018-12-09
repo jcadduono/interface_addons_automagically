@@ -1547,7 +1547,7 @@ actions.burn+=/arcane_barrage
 	if ArcanePower:usable() and RuneOfPower:remains() > 6 then
 		UseCooldown(ArcanePower)
 	end
-	if PresenceOfMind:usable() and (RuneOfPower:remains() <= (2 * ArcaneBlast:castTime()) or ArcanePower:remains() <= (2 * ArcaneBlast:castTime())) then
+	if PresenceOfMind:usable() and ((RuneOfPower:up() and RuneOfPower:remains() <= (2 * ArcaneBlast:castTime())) or (ArcanePower:up() and ArcanePower:remains() <= (2 * ArcaneBlast:castTime()))) then
 		UseCooldown(PresenceOfMind)
 	end
 	if Opt.pot and BattlePotionOfIntellect:usable() and ArcanePower:up() then
