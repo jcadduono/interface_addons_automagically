@@ -2499,7 +2499,7 @@ local ResourceFramePoints = {
 	['blizzard'] = {
 		[SPEC.ARCANE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['below'] = { 'TOP', 'BOTTOM', 0, 0 }
 		},
 		[SPEC.FIRE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
