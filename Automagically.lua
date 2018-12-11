@@ -251,9 +251,8 @@ local targetModes = {
 	[SPEC.ARCANE] = {
 		{1, ''},
 		{2, '2'},
-		{3, '3'},
-		{4, '4'},
-		{5, '5+'}
+		{3, '3+'},
+		{6, '6+'},
 	},
 	[SPEC.FIRE] = {
 		{1, ''},
@@ -1505,6 +1504,7 @@ actions.burn+=/ancestral_call
 actions.burn+=/presence_of_mind,if=buff.rune_of_power.remains<=buff.presence_of_mind.max_stack*action.arcane_blast.execute_time|buff.arcane_power.remains<=buff.presence_of_mind.max_stack*action.arcane_blast.execute_time
 actions.burn+=/potion,if=buff.arcane_power.up&(buff.berserking.up|buff.blood_fury.up|!(race.troll|race.orc))
 actions.burn+=/arcane_orb,if=buff.arcane_charge.stack=0|(active_enemies<3|(active_enemies<2&talent.resonance.enabled))
+actions.burn+=/arcane_blast,if=active_enemies>=3&active_enemies<6&buff.rule_of_threes.up&buff.arcane_charge.stack>3
 actions.burn+=/arcane_barrage,if=active_enemies>=3&(buff.arcane_charge.stack=buff.arcane_charge.max_stack)
 actions.burn+=/arcane_explosion,if=active_enemies>=3
 # Ignore Arcane Missiles during Arcane Power, aside from some very specific exceptions, like not having Overpowered talented & running 3x Arcane Pummeling.
@@ -1557,17 +1557,23 @@ actions.burn+=/arcane_barrage
 	if ArcaneOrb:usable() and (ArcaneCharges() == 0 or Enemies() < (Resonance.known and 2 or 3)) then
 		UseCooldown(ArcaneOrb)
 	end
-	if ArcaneBarrage:usable() and Enemies() >= 3 and ArcaneCharges() == 4 then
-		return ArcaneBarrage
-	end
-	if ArcaneExplosion:usable() and Enemies() >= 3 then
-		return ArcaneExplosion
-	end
-	if ArcaneMissiles:usable() and Clearcasting:up() and Enemies() < 3 and (Amplification.known or (not Overpowered.known and ArcanePummeling:azeriteRank() >= 2) or ArcanePower:down()) then
-		return ArcaneMissiles
-	end
-	if ArcaneBlast:usable() and Enemies() < 3 then
-		return ArcaneBlast
+	if Enemies() >= 3 then
+		if RuleOfThrees.known and Enemies() < 6 and ArcaneBlast:usable() and ArcaneCharges() > 3 and RuleOfThrees:up() then
+			return ArcaneBlast
+		end
+		if ArcaneBarrage:usable() and ArcaneCharges() == 4 then
+			return ArcaneBarrage
+		end
+		if ArcaneExplosion:usable() then
+			return ArcaneExplosion
+		end
+	else
+		if ArcaneMissiles:usable() and Clearcasting:up() and (Amplification.known or (not Overpowered.known and ArcanePummeling:azeriteRank() >= 2) or ArcanePower:down()) then
+			return ArcaneMissiles
+		end
+		if ArcaneBlast:usable() then
+			return ArcaneBlast
+		end
 	end
 	self:toggle_burn_phase(false)
 	if Evocation:usable() then
