@@ -760,7 +760,7 @@ local Supernova = Ability.add(157980, false, true)
 Supernova.cooldown_duration = 25
 Supernova:setAutoAoe(true)
 ------ Procs
-local Clearcasting = Ability.add(263725, true, true)
+local Clearcasting = Ability.add(263725, true, true, 276743)
 Clearcasting.buff_duration = 15
 ---- Fire
 local BlazingBarrier = Ability.add(235313, true, true)
