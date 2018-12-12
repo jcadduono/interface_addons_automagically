@@ -2513,30 +2513,30 @@ local resourceAnchor = {}
 local ResourceFramePoints = {
 	['blizzard'] = {
 		[SPEC.ARCANE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 0 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -28 }
 		},
 		[SPEC.FIRE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -18 }
 		},
 		[SPEC.FROST] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 42 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -18 }
 		}
 	},
 	['kui'] = {
 		[SPEC.ARCANE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		},
 		[SPEC.FIRE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
 		},
 		[SPEC.FROST] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 41 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -16 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 30 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -4 }
 		}
 	},
 }
@@ -2564,7 +2564,7 @@ local function HookResourceFrame()
 		resourceAnchor.frame = KuiNameplatesPlayerAnchor
 	else
 		resourceAnchor.name = 'blizzard'
-		resourceAnchor.frame = NamePlatePlayerResourceFrame
+		resourceAnchor.frame = ClassNameplateManaBarFrame
 	end
 	resourceAnchor.frame:HookScript("OnHide", OnResourceFrameHide)
 	resourceAnchor.frame:HookScript("OnShow", OnResourceFrameShow)
