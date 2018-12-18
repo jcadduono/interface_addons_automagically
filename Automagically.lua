@@ -3148,17 +3148,17 @@ function SlashCmdList.Automagically(msg, editbox)
 			if startsWith(msg[2], 'b') then
 				Opt.hide.arcane = not Opt.hide.arcane
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Automagically - BeastMastery specialization: |cFFFFD000' .. (Opt.hide.arcane and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Automagically - Arcane specialization: |cFFFFD000' .. (Opt.hide.arcane and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 			if startsWith(msg[2], 'm') then
 				Opt.hide.fire = not Opt.hide.fire
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Automagically - Marksmanship specialization: |cFFFFD000' .. (Opt.hide.fire and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Automagically - Fire specialization: |cFFFFD000' .. (Opt.hide.fire and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 			if startsWith(msg[2], 's') then
 				Opt.hide.frost = not Opt.hide.frost
 				events:PLAYER_SPECIALIZATION_CHANGED('player')
-				return print('Automagically - Survival specialization: |cFFFFD000' .. (Opt.hide.frost and '|cFFC00000Off' or '|cFF00C000On'))
+				return print('Automagically - Frost specialization: |cFFFFD000' .. (Opt.hide.frost and '|cFFC00000Off' or '|cFF00C000On'))
 			end
 		end
 		return print('Automagically - Possible hidespec options: |cFFFFD000arcane|r/|cFFFFD000fire|r/|cFFFFD000frost|r - toggle disabling Automagically for specializations')
