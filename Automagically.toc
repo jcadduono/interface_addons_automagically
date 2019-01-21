@@ -1,7 +1,7 @@
 ## Interface: 80100
 ## Title: Automagically
 ## Notes: Automagically is an addon for mages that simplifies gameplay and maximizes DPS by doing all the decision making for you
-## Author: Jpapertowels @ curse.com or Spy#1955 @ BattleTag
+## Author: jcadduono @ curseforge.com or Spy#1955 @ BattleTag
 ## SavedVariablesPerCharacter: Automagically
-## Version: 8.1.0-2
+## Version: 8.1.0-3
 Automagically.lua
