@@ -26,7 +26,7 @@ local Opt -- use this as a local table reference to Automagically
 SLASH_Automagically1, SLASH_Automagically2, SLASH_Automagically3 = '/am', '/amagic', '/auto'
 BINDING_HEADER_AUTOMAGICALLY = 'Automagically'
 
-local function InitializeVariables()
+local function InitializeOpts()
 	local function SetDefaults(t, ref)
 		local k, v
 		for k, v in next, ref do
@@ -62,7 +62,7 @@ local function InitializeVariables()
 			interrupt = false,
 			extra = true,
 			blizzard = false,
-			color = { r = 1, g = 1, b = 1 }
+			color = { r = 1, g = 1, b = 1 },
 		},
 		hide = {
 			arcane = false,
@@ -70,7 +70,7 @@ local function InitializeVariables()
 			frost = false
 		},
 		alpha = 1,
-		frequency = 0.05,
+		frequency = 0.2,
 		previous = true,
 		always_on = false,
 		cooldown = true,
@@ -97,7 +97,13 @@ local SPEC = {
 
 local events, glows = {}, {}
 
-local abilityTimer, currentSpec, targetMode, combatStartTime = 0, 0, 0, 0
+local timer = {
+	combat = 0,
+	display = 0,
+	health = 0
+}
+
+local currentSpec, targetMode, combatStartTime = 0, 0, 0
 
 -- current target information
 local Target = {
@@ -147,7 +153,8 @@ local BaseMana = {
 }
 
 local var = {
-	gcd = 1.5
+	gcd = 1.5,
+	time_diff = 0,
 }
 
 local amagicPanel = CreateFrame('Frame', 'amagicPanel', UIParent)
@@ -271,7 +278,11 @@ local targetModes = {
 }
 
 local function SetTargetMode(mode)
+	if mode == targetMode then
+		return
+	end
 	targetMode = min(mode, #targetModes[currentSpec])
+	var.enemy_count = targetModes[currentSpec][targetMode][1]
 	amagicPanel.targets:SetText(targetModes[currentSpec][targetMode][2])
 end
 Automagically_SetTargetMode = SetTargetMode
@@ -289,9 +300,35 @@ end
 Automagically_ToggleTargetModeReverse = ToggleTargetModeReverse
 
 local autoAoe = {
-	abilities = {},
-	targets = {}
+	targets = {},
+	blacklist = {}
 }
+
+function autoAoe:add(guid, update)
+	if self.blacklist[guid] then
+		return
+	end
+	local new = not self.targets[guid]
+	self.targets[guid] = var.time
+	if update and new then
+		self:update()
+	end
+end
+
+function autoAoe:remove(guid)
+	self.blacklist[guid] = var.time
+	if self.targets[guid] then
+		self.targets[guid] = nil
+		self:update()
+	end
+end
+
+function autoAoe:clear(guid)
+	local guid
+	for guid in next, self.targets do
+		self.targets[guid] = nil
+	end
+end
 
 function autoAoe:update()
 	local count, i = 0
@@ -302,36 +339,28 @@ function autoAoe:update()
 		SetTargetMode(1)
 		return
 	end
+	var.enemy_count = count
 	for i = #targetModes[currentSpec], 1, -1 do
 		if count >= targetModes[currentSpec][i][1] then
 			SetTargetMode(i)
+			var.enemy_count = count
 			return
 		end
 	end
 end
 
-function autoAoe:add(guid)
-	local new = not self.targets[guid]
-	self.targets[guid] = GetTime()
-	if new then
-		self:update()
-	end
-end
-
-function autoAoe:remove(guid)
-	if self.targets[guid] then
-		self.targets[guid] = nil
-		self:update()
-	end
-end
-
 function autoAoe:purge()
 	local update, guid, t
-	local now = GetTime()
 	for guid, t in next, self.targets do
-		if now - t > Opt.auto_aoe_ttl then
+		if var.time - t > Opt.auto_aoe_ttl then
 			self.targets[guid] = nil
 			update = true
+		end
+	end
+	-- blacklist enemies for 2 seconds when they die to prevent out of order events from re-adding them
+	for guid, t in next, self.blacklist do
+		if var.time - t > 2 then
+			self.blacklist[guid] = nil
 		end
 	end
 	if update then
@@ -343,8 +372,11 @@ end
 
 -- Start Abilities
 
-local Ability, abilities, abilityBySpellId = {}, {}, {}
+local Ability = {}
 Ability.__index = Ability
+local abilities = {
+	all = {}
+}
 
 function Ability.add(spellId, buff, player, spellId2)
 	local ability = {
@@ -369,19 +401,26 @@ function Ability.add(spellId, buff, player, spellId2)
 		auraFilter = (buff and 'HELPFUL' or 'HARMFUL') .. (player and '|PLAYER' or '')
 	}
 	setmetatable(ability, Ability)
-	abilities[#abilities + 1] = ability
-	abilityBySpellId[spellId] = ability
-	if spellId2 then
-		abilityBySpellId[spellId2] = ability
-	end
+	abilities.all[#abilities.all + 1] = ability
 	return ability
+end
+
+function Ability:match(spell)
+	if type(spell) == 'number' then
+		return spell == self.spellId or (self.spellId2 and spell == self.spellId2)
+	elseif type(spell) == 'string' then
+		return spell:lower() == self.name:lower()
+	elseif type(spell) == 'table' then
+		return spell == self
+	end
+	return false
 end
 
 function Ability:ready(seconds)
 	return self:cooldown() <= (seconds or 0)
 end
 
-function Ability:usable(seconds)
+function Ability:usable()
 	if not self.known then
 		return false
 	end
@@ -394,7 +433,7 @@ function Ability:usable(seconds)
 	if self.requires_charge and self:charges() == 0 then
 		return false
 	end
-	return self:ready(seconds)
+	return self:ready()
 end
 
 function Ability:remains()
@@ -407,7 +446,7 @@ function Ability:remains()
 		if not id then
 			return 0
 		end
-		if id == self.spellId or id == self.spellId2 then
+		if self:match(id) then
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
@@ -434,7 +473,7 @@ function Ability:up()
 		if not id then
 			return false
 		end
-		if id == self.spellId or id == self.spellId2 then
+		if self:match(id) then
 			return expires == 0 or expires - var.time > var.execute_remains
 		end
 	end
@@ -465,9 +504,9 @@ end
 
 function Ability:ticking()
 	if self.aura_targets then
-		local count, guid, expires = 0
-		for guid, expires in next, self.aura_targets do
-			if expires - var.time > var.execute_remains then
+		local count, guid, aura = 0
+		for guid, aura in next, self.aura_targets do
+			if aura.expires - (var.time - var.time_diff) > var.execute_remains then
 				count = count + 1
 			end
 		end
@@ -498,7 +537,7 @@ function Ability:stack()
 		if not id then
 			return 0
 		end
-		if id == self.spellId or id == self.spellId2 then
+		if self:match(id) then
 			return (expires == 0 or expires - var.time > var.execute_remains) and count or 0
 		end
 	end
@@ -558,10 +597,6 @@ function Ability:castRegen()
 	return var.mana_regen * self:castTime() - self:cost()
 end
 
-function Ability:wontCapMana(reduction)
-	return (var.mana + self:castRegen()) < (var.mana_max - (reduction or 5))
-end
-
 function Ability:tickTime()
 	return self.hasted_ticks and (var.haste_factor * self.tick_interval) or self.tick_interval
 end
@@ -577,46 +612,26 @@ function Ability:azeriteRank()
 	return Azerite.traits[self.spellId] or 0
 end
 
-function Ability:setAutoAoe(enabled)
-	if enabled and not self.auto_aoe then
-		self.auto_aoe = true
-		self.first_hit_time = nil
-		self.targets_hit = {}
-		autoAoe.abilities[#autoAoe.abilities + 1] = self
-	end
-	if not enabled and self.auto_aoe then
-		self.auto_aoe = nil
-		self.first_hit_time = nil
-		self.targets_hit = nil
-		local i
-		for i = 1, #autoAoe.abilities do
-			if autoAoe.abilities[i] == self then
-				autoAoe.abilities[i] = nil
-				break
-			end
-		end
-	end
+function Ability:autoAoe()
+	self.auto_aoe = true
+	self.first_hit_time = nil
+	self.targets_hit = {}
 end
 
 function Ability:recordTargetHit(guid)
-	local t = GetTime()
-	self.targets_hit[guid] = t
+	self.targets_hit[guid] = var.time
 	if not self.first_hit_time then
-		self.first_hit_time = t
+		self.first_hit_time = self.targets_hit[guid]
 	end
 end
 
 function Ability:updateTargetsHit()
-	if self.first_hit_time and GetTime() - self.first_hit_time >= 0.3 then
+	if self.first_hit_time and var.time - self.first_hit_time >= 0.3 then
 		self.first_hit_time = nil
-		local guid, t
-		for guid in next, autoAoe.targets do
-			if not self.targets_hit[guid] then
-				autoAoe.targets[guid] = nil
-			end
-		end
-		for guid, t in next, self.targets_hit do
-			autoAoe.targets[guid] = t
+		autoAoe:clear()
+		local guid
+		for guid in next, self.targets_hit do
+			autoAoe:add(guid)
 			self.targets_hit[guid] = nil
 		end
 		autoAoe:update()
@@ -625,48 +640,51 @@ end
 
 -- start DoT tracking
 
-local trackAuras = {
-	abilities = {}
-}
+local trackAuras = {}
 
 function trackAuras:purge()
-	local now = GetTime()
+	local now = var.time - var.time_diff
 	local _, ability, guid, expires
-	for _, ability in next, self.abilities do
-		for guid, expires in next, ability.aura_targets do
-			if expires <= now then
+	for _, ability in next, abilities.trackAuras do
+		for guid, aura in next, ability.aura_targets do
+			if aura.expires <= now then
 				ability:removeAura(guid)
 			end
 		end
 	end
 end
 
-function Ability:trackAuras()
-	self.aura_targets = {}
-	trackAuras.abilities[self.spellId] = self
-	if self.spellId2 then
-		trackAuras.abilities[self.spellId2] = self
+function trackAuras:remove(guid)
+	local _, ability
+	for _, ability in next, abilities.trackAuras do
+		ability:removeAura(guid)
 	end
 end
 
-function Ability:applyAura(guid)
-	if self.aura_targets and UnitGUID(self.auraTarget) == guid then -- for now, we can only track if the enemy is targeted
-		local _, i, id, expires
-		for i = 1, 40 do
-			_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
-			if not id then
-				return
-			end
-			if id == self.spellId or id == self.spellId2 then
-				self.aura_targets[guid] = expires
-				return
-			end
-		end
+function Ability:trackAuras()
+	self.aura_targets = {}
+end
+
+function Ability:applyAura(timeStamp, guid)
+	local aura = {
+		expires = timeStamp + self:duration()
+	}
+	self.aura_targets[guid] = aura
+end
+
+function Ability:refreshAura(timeStamp, guid)
+	local aura = self.aura_targets[guid]
+	if not aura then
+		self:applyAura(timeStamp, guid)
+		return
 	end
+	local remains = aura.expires - timeStamp
+	local duration = self:duration()
+	aura.expires = timeStamp + min(duration * 1.3, remains + duration)
 end
 
 function Ability:removeAura(guid)
-	if self.aura_targets then
+	if self.aura_targets[guid] then
 		self.aura_targets[guid] = nil
 	end
 end
@@ -712,12 +730,12 @@ local ArcaneBarrage = Ability.add(44425, false, true)
 ArcaneBarrage.cooldown_duration = 3
 ArcaneBarrage.hasted_cooldown = true
 ArcaneBarrage:setVelocity(25)
-ArcaneBarrage:setAutoAoe(true)
+ArcaneBarrage:autoAoe()
 local ArcaneBlast = Ability.add(30451, false, true)
 ArcaneBlast.mana_cost = 2.75
 local ArcaneExplosion = Ability.add(1449, false, true)
 ArcaneExplosion.mana_cost = 10
-ArcaneExplosion:setAutoAoe(true)
+ArcaneExplosion:autoAoe()
 local ArcaneMissiles = Ability.add(5143, false, true, 7268)
 ArcaneMissiles.mana_cost = 15
 ArcaneMissiles:setVelocity(50)
@@ -742,7 +760,7 @@ ArcaneFamiliar.cooldown_duration = 10
 local ArcaneOrb = Ability.add(153626, false, true, 153640)
 ArcaneOrb.mana_cost = 1
 ArcaneOrb.cooldown_duration = 20
-ArcaneOrb:setAutoAoe(true)
+ArcaneOrb:autoAoe()
 local ChargedUp = Ability.add(205032, true, true)
 ChargedUp.cooldown_duration = 40
 local NetherTempest = Ability.add(114923, false, true, 114954)
@@ -750,7 +768,7 @@ NetherTempest.mana_cost = 1.5
 NetherTempest.buff_duration = 12
 NetherTempest.tick_interval = 1
 NetherTempest.hasted_ticks = true
-NetherTempest:setAutoAoe(true)
+NetherTempest:autoAoe()
 local Overpowered = Ability.add(155147, false, true)
 local Resonance = Ability.add(205028, false, true)
 local RuleOfThrees = Ability.add(264354, true, true, 264774)
@@ -758,7 +776,7 @@ RuleOfThrees.buff_duration = 15
 local Slipstream = Ability.add(236457, false, true)
 local Supernova = Ability.add(157980, false, true)
 Supernova.cooldown_duration = 25
-Supernova:setAutoAoe(true)
+Supernova:autoAoe()
 ------ Procs
 local Clearcasting = Ability.add(263725, true, true, 276743)
 Clearcasting.buff_duration = 15
@@ -776,7 +794,7 @@ local DragonsBreath = Ability.add(31661, false, true)
 DragonsBreath.mana_cost = 4
 DragonsBreath.buff_duration = 4
 DragonsBreath.cooldown_duration = 20
-DragonsBreath:setAutoAoe(true)
+DragonsBreath:autoAoe()
 local Fireball = Ability.add(133, false, true)
 Fireball.mana_cost = 2
 Fireball:setVelocity(45)
@@ -789,7 +807,7 @@ FireBlast.triggers_gcd = false
 local Flamestrike = Ability.add(2120, false, true)
 Flamestrike.mana_cost = 2.5
 Flamestrike.buff_duration = 8
-Flamestrike:setAutoAoe(true)
+Flamestrike:autoAoe()
 local Ignite = Ability.add(12654, false, true)
 Ignite.buff_duration = 9
 Ignite.tick_interval = 1
@@ -820,7 +838,7 @@ LivingBomb.hasted_duration = true
 LivingBomb.hasted_cooldown = true
 LivingBomb.hasted_ticks = true
 LivingBomb.explosion = Ability.add(44461, false, true)
-LivingBomb.explosion:setAutoAoe(true)
+LivingBomb.explosion:autoAoe()
 LivingBomb.spread = Ability.add(44461, false, true)
 LivingBomb.spread.buff_duration = 4
 LivingBomb.spread.tick_interval = 1
@@ -830,12 +848,12 @@ local Meteor = Ability.add(153561, false, true, 153564)
 Meteor.mana_cost = 1
 Meteor.buff_duration = 8
 Meteor.cooldown_duration = 45
-Meteor:setAutoAoe(true)
+Meteor:autoAoe()
 local PhoenixFlames = Ability.add(257541, false, true, 257542)
 PhoenixFlames.cooldown_duration = 30
 PhoenixFlames.requires_charge = true
 PhoenixFlames:setVelocity(50)
-PhoenixFlames:setAutoAoe(true)
+PhoenixFlames:autoAoe()
 local Pyroclasm = Ability.add(269650, false, true, 269651)
 Pyroclasm.buff_duration = 15
 local SearingTouch = Ability.add(269644, false, true)
@@ -848,14 +866,14 @@ HotStreak.buff_duration = 15
 local Blizzard = Ability.add(190356, false, true, 190357)
 Blizzard.mana_cost = 2.5
 Blizzard.cooldown_duration = 8
-Blizzard:setAutoAoe(true)
+Blizzard:autoAoe()
 local Chilled = Ability.add(205708, false, true)
 Chilled.buff_duration = 15
 local ConeOfCold = Ability.add(120, false, true)
 ConeOfCold.mana_cost = 4
 ConeOfCold.buff_duration = 5
 ConeOfCold.cooldown_duration = 12
-ConeOfCold:setAutoAoe(true)
+ConeOfCold:autoAoe()
 local Flurry = Ability.add(44614, false, true, 228354)
 Flurry.mana_cost = 1
 Flurry.buff_duration = 1
@@ -865,20 +883,20 @@ Freeze.cooldown_duration = 25
 Freeze.buff_duration = 8
 Freeze.requires_pet = true
 Freeze.triggers_gcd = false
-Freeze:setAutoAoe(true)
+Freeze:autoAoe()
 local Frostbolt = Ability.add(116, false, true, 228597)
 Frostbolt.mana_cost = 2
 Frostbolt:setVelocity(35)
 local FrostNova = Ability.add(122, false, true)
 FrostNova.mana_cost = 2
 FrostNova.buff_duration = 8
-FrostNova:setAutoAoe(true)
+FrostNova:autoAoe()
 local FrozenOrb = Ability.add(84714, false, true, 84721)
 FrozenOrb.mana_cost = 1
 FrozenOrb.buff_duration = 15
 FrozenOrb.cooldown_duration = 60
 FrozenOrb:setVelocity(20)
-FrozenOrb:setAutoAoe(true)
+FrozenOrb:autoAoe()
 local IceBarrier = Ability.add(11426, true, true)
 IceBarrier.mana_cost = 3
 IceBarrier.buff_duration = 60
@@ -900,7 +918,7 @@ ChainReaction.buff_duration = 10
 local CometStorm = Ability.add(153595, false, true, 153596)
 CometStorm.mana_cost = 1
 CometStorm.cooldown_duration = 30
-CometStorm:setAutoAoe(true)
+CometStorm:autoAoe()
 local Ebonbolt = Ability.add(257537, false, true, 257538)
 Ebonbolt.mana_cost = 2
 Ebonbolt.cooldown_duration = 45
@@ -919,7 +937,7 @@ IceFloes.cooldown_duration = 20
 local IceNova = Ability.add(157997, false, true)
 IceNova.buff_duration = 2
 IceNova.cooldown_duration = 25
-IceNova:setAutoAoe(true)
+IceNova:autoAoe()
 local LonelyWinter = Ability.add(205024, false, true)
 local RayOfFrost = Ability.add(205021, false, true)
 RayOfFrost.mana_cost = 2
@@ -1084,7 +1102,7 @@ local function GCD()
 end
 
 local function Enemies()
-	return targetModes[currentSpec][targetMode][1]
+	return var.enemy_count
 end
 
 local function TimeInCombat()
@@ -1342,42 +1360,6 @@ function HotStreak:up()
 end
 
 -- End Ability Modifications
-
-local function UpdateVars()
-	local _, start, duration, remains, spellId
-	var.last_main = var.main
-	var.last_cd = var.cd
-	var.last_extra = var.extra
-	var.main =  nil
-	var.cd = nil
-	var.extra = nil
-	var.time = GetTime()
-	start, duration = GetSpellCooldown(61304)
-	var.gcd_remains = start > 0 and duration - (var.time - start) or 0
-	_, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
-	var.ability_casting = abilityBySpellId[spellId]
-	var.execute_remains = max(remains and (remains / 1000 - var.time) or 0, var.gcd_remains)
-	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
-	var.gcd = 1.5 * var.haste_factor
-	var.mana_regen = GetPowerRegen()
-	var.mana = UnitPower('player', 0) + (var.mana_regen * var.execute_remains)
-	if var.ability_casting then
-		var.mana = var.mana - var.ability_casting:cost()
-	end
-	var.mana = min(max(var.mana, 0), var.mana_max)
-	if currentSpec == SPEC.ARCANE then
-		var.arcane_charges = UnitPower('player', 16)
-	end
-	var.pet = UnitGUID('pet')
-	var.pet_exists = UnitExists('pet') and not UnitIsDead('pet')
-	Target.health = UnitHealth('target')
-	table.remove(Target.healthArray, 1)
-	Target.healthArray[#Target.healthArray + 1] = Target.health
-	Target.timeToDieMax = Target.health / UnitHealthMax('player') * 5
-	Target.healthPercentage = Target.healthMax > 0 and (Target.health / Target.healthMax * 100) or 100
-	Target.healthLostPerSec = (Target.healthArray[1] - Target.health) / 3
-	Target.timeToDie = Target.healthLostPerSec > 0 and min(Target.timeToDieMax, (Target.health - (Target.healthLostPerSec * var.execute_remains) / Target.healthLostPerSec)) or Target.timeToDieMax
-end
 
 local function UseCooldown(ability, overwrite, always)
 	if always or (Opt.cooldown and (not Opt.boss_only or Target.boss) and (not var.cd or overwrite)) then
@@ -2430,7 +2412,6 @@ local function ShouldHide()
 		   (currentSpec == SPEC.ARCANE and Opt.hide.arcane) or
 		   (currentSpec == SPEC.FIRE and Opt.hide.fire) or
 		   (currentSpec == SPEC.FROST and Opt.hide.frost))
-
 end
 
 local function Disappear()
@@ -2578,17 +2559,71 @@ local function UpdateAlpha()
 	amagicExtraPanel:SetAlpha(Opt.alpha)
 end
 
-local function UpdateHealthArray()
-	Target.healthArray = {}
-	local i
-	for i = 1, floor(3 / Opt.frequency) do
-		Target.healthArray[i] = 0
+local function UpdateTargetHealth()
+	timer.health = 0
+	Target.health = UnitHealth('target')
+	table.remove(Target.healthArray, 1)
+	Target.healthArray[15] = Target.health
+	Target.timeToDieMax = Target.health / UnitHealthMax('player') * 10
+	Target.healthPercentage = Target.healthMax > 0 and (Target.health / Target.healthMax * 100) or 100
+	Target.healthLostPerSec = (Target.healthArray[1] - Target.health) / 3
+	Target.timeToDie = Target.healthLostPerSec > 0 and min(Target.timeToDieMax, Target.health / Target.healthLostPerSec) or Target.timeToDieMax
+end
+
+local function UpdateDisplay()
+	timer.display = 0
+	if Opt.dimmer then
+		if not var.main then
+			amagicPanel.dimmer:Hide()
+		elseif var.main.spellId and IsUsableSpell(var.main.spellId) then
+			amagicPanel.dimmer:Hide()
+		elseif var.main.itemId and IsUsableItem(var.main.itemId) then
+			amagicPanel.dimmer:Hide()
+		else
+			amagicPanel.dimmer:Show()
+		end
 	end
 end
 
 local function UpdateCombat()
-	abilityTimer = 0
-	UpdateVars()
+	timer.combat = 0
+	local _, start, duration, remains, spellId
+	var.time = GetTime()
+	var.last_main = var.main
+	var.last_cd = var.cd
+	var.last_extra = var.extra
+	var.main =  nil
+	var.cd = nil
+	var.extra = nil
+	start, duration = GetSpellCooldown(61304)
+	var.gcd_remains = start > 0 and duration - (var.time - start) or 0
+	_, _, _, _, remains, _, _, _, spellId = UnitCastingInfo('player')
+	var.ability_casting = abilities.bySpellId[spellId]
+	var.execute_remains = max(remains and (remains / 1000 - var.time) or 0, var.gcd_remains)
+	var.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
+	var.gcd = 1.5 * var.haste_factor
+	var.mana_regen = GetPowerRegen()
+	var.mana = UnitPower('player', 0) + (var.mana_regen * var.execute_remains)
+	var.mana_max = UnitPowerMax('player', 0)
+	if var.ability_casting then
+		var.mana = var.mana - var.ability_casting:cost()
+	end
+	var.mana = min(max(var.mana, 0), var.mana_max)
+	if currentSpec == SPEC.ARCANE then
+		var.arcane_charges = UnitPower('player', 16)
+	end
+	var.pet = UnitGUID('pet')
+	var.pet_exists = UnitExists('pet') and not UnitIsDead('pet')
+
+	trackAuras:purge()
+	if Opt.auto_aoe then
+		local ability
+		for _, ability in next, abilities.autoAoe do
+			ability:updateTargetsHit()
+		end
+		autoAoe:purge()
+	end
+
 	var.main = APL[currentSpec]:main()
 	if var.main ~= var.last_main then
 		if var.main then
@@ -2616,17 +2651,6 @@ local function UpdateCombat()
 			amagicExtraPanel:Hide()
 		end
 	end
-	if Opt.dimmer then
-		if not var.main then
-			amagicPanel.dimmer:Hide()
-		elseif var.main.spellId and IsUsableSpell(var.main.spellId) then
-			amagicPanel.dimmer:Hide()
-		elseif var.main.itemId and IsUsableItem(var.main.itemId) then
-			amagicPanel.dimmer:Hide()
-		else
-			amagicPanel.dimmer:Show()
-		end
-	end
 	if Opt.interrupt then
 		UpdateInterrupt()
 	end
@@ -2635,6 +2659,13 @@ local function UpdateCombat()
 		amagicPanel.text:Show()
 	end
 	UpdateGlows()
+	UpdateDisplay()
+end
+
+local function UpdateCombatWithin(seconds)
+	if Opt.frequency - timer.combat > seconds then
+		timer.combat = max(seconds, Opt.frequency - seconds)
+	end
 end
 
 function events:SPELL_UPDATE_COOLDOWN()
@@ -2655,6 +2686,24 @@ function events:SPELL_UPDATE_COOLDOWN()
 	end
 end
 
+function events:UNIT_POWER_UPDATE(srcName, powerType)
+	if srcName == 'player' and powerType == 'ARCANE_CHARGES' then
+		UpdateCombatWithin(0.05)
+	end
+end
+
+function events:UNIT_SPELLCAST_START(srcName)
+	if Opt.interrupt and srcName == 'target' then
+		UpdateCombatWithin(0.05)
+	end
+end
+
+function events:UNIT_SPELLCAST_STOP(srcName)
+	if Opt.interrupt and srcName == 'target' then
+		UpdateCombatWithin(0.05)
+	end
+end
+
 function events:ADDON_LOADED(name)
 	if name == 'Automagically' then
 		Opt = Automagically
@@ -2665,9 +2714,8 @@ function events:ADDON_LOADED(name)
 		if UnitLevel('player') < 110 then
 			print('[|cFFFFD000Warning|r] Automagically is not designed for players under level 110, and almost certainly will not operate properly!')
 		end
-		InitializeVariables()
+		InitializeOpts()
 		Azerite:initialize()
-		UpdateHealthArray()
 		UpdateDraggable()
 		UpdateAlpha()
 		SnapAllPanels()
@@ -2681,22 +2729,37 @@ end
 
 function events:COMBAT_LOG_EVENT_UNFILTERED()
 	local timeStamp, eventType, hideCaster, srcGUID, srcName, srcFlags, srcRaidFlags, dstGUID, dstName, dstFlags, dstRaidFlags, spellId, spellName, spellSchool, extraType = CombatLogGetCurrentEventInfo()
-	if Opt.auto_aoe then
-		if eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED' then
-			if dstGUID == var.player then
-				autoAoe:add(srcGUID)
-			elseif srcGUID == var.player then
-				autoAoe:add(dstGUID)
-			end
-		elseif eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
+	var.time = GetTime()
+	if eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
+		trackAuras:remove(dstGUID)
+		if Opt.auto_aoe then
 			autoAoe:remove(dstGUID)
 		end
 	end
-	if srcGUID ~= var.player and srcGUID ~= var.pet then
+	if Opt.auto_aoe and (eventType == 'SWING_DAMAGE' or eventType == 'SWING_MISSED') then
+		if dstGUID == var.player then
+			autoAoe:add(srcGUID, true)
+		elseif srcGUID == var.player then
+			autoAoe:add(dstGUID, true)
+		end
+	end
+	if srcGUID ~= var.player or not (
+	   eventType == 'SPELL_CAST_START' or
+	   eventType == 'SPELL_CAST_SUCCESS' or
+	   eventType == 'SPELL_CAST_FAILED' or
+	   eventType == 'SPELL_AURA_REMOVED' or
+	   eventType == 'SPELL_DAMAGE' or
+	   eventType == 'SPELL_HEAL' or
+	   eventType == 'SPELL_MISSED' or
+	   eventType == 'SPELL_AURA_APPLIED' or
+	   eventType == 'SPELL_AURA_REFRESH' or
+	   eventType == 'SPELL_AURA_REMOVED')
+	then
 		return
 	end
-	local castedAbility = abilityBySpellId[spellId]
+	local castedAbility = abilities.bySpellId[spellId]
 	if not castedAbility then
+		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
 		return
 	end
 --[[ DEBUG ]
@@ -2706,21 +2769,17 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		castedAbility.last_trigger = timeStamp
 	end
 --[ DEBUG ]]
+	var.time_diff = var.time - timeStamp
+	UpdateCombatWithin(0.05)
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		var.last_ability = castedAbility
-		castedAbility.last_used = GetTime()
+		castedAbility.last_used = var.time
 		if castedAbility.triggers_gcd then
 			PreviousGCD[10] = nil
 			table.insert(PreviousGCD, 1, castedAbility)
 		end
 		if castedAbility.travel_start then
-			castedAbility.travel_start[dstGUID] = castedAbility.last_used
-		end
-		if Opt.previous and amagicPanel:IsVisible() then
-			amagicPreviousPanel.ability = castedAbility
-			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
-			amagicPreviousPanel.icon:SetTexture(castedAbility.icon)
-			amagicPreviousPanel:Show()
+			castedAbility.travel_start[dstGUID] = var.time
 		end
 		if currentSpec == SPEC.ARCANE then
 			if castedAbility == ArcanePower then
@@ -2729,17 +2788,34 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 				APL[SPEC.ARCANE]:toggle_burn_phase(false)
 			end
 		end
+		if Opt.previous and amagicPanel:IsVisible() then
+			amagicPreviousPanel.ability = castedAbility
+			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+			amagicPreviousPanel.icon:SetTexture(castedAbility.icon)
+			amagicPreviousPanel:Show()
+		end
 		return
+	end
+	if castedAbility.aura_targets then
+		if eventType == 'SPELL_AURA_APPLIED' then
+			castedAbility:applyAura(timeStamp, dstGUID)
+		elseif eventType == 'SPELL_AURA_REFRESH' then
+			castedAbility:refreshAura(timeStamp, dstGUID)
+		elseif eventType == 'SPELL_AURA_REMOVED' then
+			castedAbility:removeAura(dstGUID)
+		end
 	end
 	if eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
 		if castedAbility.travel_start and castedAbility.travel_start[dstGUID] then
 			castedAbility.travel_start[dstGUID] = nil
 		end
-		if Opt.auto_aoe and castedAbility.auto_aoe then
-			castedAbility:recordTargetHit(dstGUID)
-		end
-		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and amagicPanel:IsVisible() and castedAbility == amagicPreviousPanel.ability then
-			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\misseffect.blp')
+		if Opt.auto_aoe then
+			if castedAbility.auto_aoe then
+				castedAbility:recordTargetHit(dstGUID)
+			end
+			if castedAbility == Ignite and (eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH') then
+				autoAoe:add(dstGUID, true)
+			end
 		end
 		if currentSpec == SPEC.FROST and dstGUID == Target.guid and Target.freezable == '?' then
 			if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
@@ -2752,15 +2828,8 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 				end
 			end
 		end
-		if currentSpec == SPEC.FIRE and Opt.auto_aoe and castedAbility == Ignite and (eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH') then
-			autoAoe:add(dstGUID)
-		end
-	end
-	if castedAbility.aura_targets then
-		if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
-			castedAbility:applyAura(dstGUID)
-		elseif eventType == 'SPELL_AURA_REMOVED' or eventType == 'UNIT_DIED' or eventType == 'UNIT_DESTROYED' or eventType == 'UNIT_DISSIPATES' or eventType == 'SPELL_INSTAKILL' or eventType == 'PARTY_KILL' then
-			castedAbility:removeAura(dstGUID)
+		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and amagicPanel:IsVisible() and castedAbility == amagicPreviousPanel.ability then
+			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\misseffect.blp')
 		end
 	end
 end
@@ -2778,10 +2847,11 @@ local function UpdateTargetInfo()
 		Target.healthMax = 0
 		Target.freezable = '?'
 		local i
-		for i = 1, #Target.healthArray do
+		for i = 1, 15 do
 			Target.healthArray[i] = 0
 		end
 		if Opt.always_on then
+			UpdateTargetHealth()
 			UpdateCombat()
 			amagicPanel:Show()
 			return true
@@ -2795,7 +2865,7 @@ local function UpdateTargetInfo()
 		Target.guid = guid
 		Target.freezable = '?'
 		local i
-		for i = 1, #Target.healthArray do
+		for i = 1, 15 do
 			Target.healthArray[i] = UnitHealth('target')
 		end
 	end
@@ -2812,6 +2882,7 @@ local function UpdateTargetInfo()
 	end
 	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
 	if Target.hostile or Opt.always_on then
+		UpdateTargetHealth()
 		UpdateCombat()
 		amagicPanel:Show()
 		return true
@@ -2841,16 +2912,9 @@ end
 function events:PLAYER_REGEN_ENABLED()
 	combatStartTime = 0
 	local _, ability, guid
-	for _, ability in next, abilities do
-		if ability.travel_start then
-			for guid in next, ability.travel_start do
-				ability.travel_start[guid] = nil
-			end
-		end
-		if ability.aura_targets then
-			for guid in next, ability.aura_targets do
-				ability.aura_targets[guid] = nil
-			end
+	for _, ability in next, abilities.velocity do
+		for guid in next, ability.travel_start do
+			ability.travel_start[guid] = nil
 		end
 	end
 	if Opt.auto_aoe then
@@ -2875,14 +2939,34 @@ end
 
 local function UpdateAbilityData()
 	var.mana_base = BaseMana[UnitLevel('player')]
-	var.mana_max = UnitPowerMax('player', 0)
 	local _, ability
-	for _, ability in next, abilities do
+	for _, ability in next, abilities.all do
 		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = (IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) or Azerite.traits[ability.spellId]) and true or false
 	end
 	if SummonWaterElemental.known then
 		Freeze.known = true
+	end
+	abilities.bySpellId = {}
+	abilities.velocity = {}
+	abilities.autoAoe = {}
+	abilities.trackAuras = {}
+	for _, ability in next, abilities.all do
+		if ability.known then
+			abilities.bySpellId[ability.spellId] = ability
+			if ability.spellId2 then
+				abilities.bySpellId[ability.spellId2] = ability
+			end
+			if ability.velocity > 0 then
+				abilities.velocity[#abilities.velocity + 1] = ability
+			end
+			if ability.auto_aoe then
+				abilities.autoAoe[#abilities.autoAoe + 1] = ability
+			end
+			if ability.aura_targets then
+				abilities.trackAuras[#abilities.trackAuras + 1] = ability
+			end
+		end
 	end
 end
 
@@ -2893,6 +2977,7 @@ end
 
 function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 	if unitName == 'player' then
+		currentSpec = GetSpecialization() or 0
 		Azerite:update()
 		UpdateAbilityData()
 		local _, i
@@ -2901,7 +2986,6 @@ function events:PLAYER_SPECIALIZATION_CHANGED(unitName)
 		end
 		amagicPreviousPanel.ability = nil
 		PreviousGCD = {}
-		currentSpec = GetSpecialization() or 0
 		SetTargetMode(1)
 		UpdateTargetInfo()
 		events:PLAYER_REGEN_ENABLED()
@@ -2918,7 +3002,6 @@ function events:PLAYER_ENTERING_WORLD()
 	local _
 	_, var.instance = IsInInstance()
 	var.player = UnitGUID('player')
-	UpdateVars()
 end
 
 amagicPanel.button:SetScript('OnClick', function(self, button, down)
@@ -2934,19 +3017,17 @@ amagicPanel.button:SetScript('OnClick', function(self, button, down)
 end)
 
 amagicPanel:SetScript('OnUpdate', function(self, elapsed)
-	abilityTimer = abilityTimer + elapsed
-	if abilityTimer >= Opt.frequency then
-		trackAuras:purge()
-		if Opt.auto_aoe then
-			local _, ability
-			for _, ability in next, autoAoe.abilities do
-				if ability.known then
-					ability:updateTargetsHit()
-				end
-			end
-			autoAoe:purge()
-		end
+	timer.combat = timer.combat + elapsed
+	timer.display = timer.display + elapsed
+	timer.health = timer.health + elapsed
+	if timer.combat >= Opt.frequency then
 		UpdateCombat()
+	end
+	if timer.display >= 0.05 then
+		UpdateDisplay()
+	end
+	if timer.health >= 0.2 then
+		UpdateTargetHealth()
 	end
 end)
 
@@ -3033,10 +3114,9 @@ function SlashCmdList.Automagically(msg, editbox)
 	end
 	if startsWith(msg[1], 'freq') then
 		if msg[2] then
-			Opt.frequency = tonumber(msg[2]) or 0.05
-			UpdateHealthArray()
+			Opt.frequency = tonumber(msg[2]) or 0.2
 		end
-		return print('Automagically - Calculation frequency: Every |cFFFFD000' .. Opt.frequency .. '|r seconds')
+		return print('Automagically - Calculation frequency (max time to wait between each update): Every |cFFFFD000' .. Opt.frequency .. '|r seconds')
 	end
 	if startsWith(msg[1], 'glow') then
 		if msg[2] == 'main' then
