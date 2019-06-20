@@ -2868,10 +2868,12 @@ local function UpdateTargetInfo()
 	if not guid then
 		Target.guid = nil
 		Target.boss = false
+		Target.stunnable = true
+		Target.classification = 'normal'
 		Target.player = false
-		Target.hostile = true
-		Target.stunnable = false
+		Target.level = UnitLevel('player')
 		Target.healthMax = 0
+		Target.hostile = true
 		local i
 		for i = 1, 15 do
 			Target.healthArray[i] = 0
@@ -2896,10 +2898,12 @@ local function UpdateTargetInfo()
 	end
 	Target.boss = false
 	Target.stunnable = true
+	Target.classification = UnitClassification('target')
+	Target.player = UnitIsPlayer('target')
 	Target.level = UnitLevel('target')
 	Target.healthMax = UnitHealthMax('target')
-	Target.player = UnitIsPlayer('target')
-	if not Target.player then
+	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
+	if not Target.player and Target.classification ~= 'minus' and Target.classification ~= 'normal' then
 		if Target.level == -1 or (Player.instance == 'party' and Target.level >= UnitLevel('player') + 2) then
 			Target.boss = true
 			Target.stunnable = false
@@ -2907,7 +2911,6 @@ local function UpdateTargetInfo()
 			Target.stunnable = false
 		end
 	end
-	Target.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
 	if Target.hostile or Opt.always_on then
 		UpdateTargetHealth()
 		UpdateCombat()
