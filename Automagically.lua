@@ -12,6 +12,10 @@ local UnitAura = _G.UnitAura
 -- end copy global functions
 
 -- useful functions
+local function between(n, min, max)
+	return n >= min and n <= max
+end
+
 local function startsWith(str, start) -- case insensitive check to see if a string matches the start of another string
 	if type(str) ~= 'string' then
 		return false
@@ -704,9 +708,8 @@ function Ability:refreshAura(guid)
 		self:applyAura(guid)
 		return
 	end
-	local remains = aura.expires - Player.time
 	local duration = self:duration()
-	aura.expires = Player.time + min(duration * 1.3, remains + duration)
+	aura.expires = Player.time + min(duration * 1.3, (aura.expires - Player.time) + duration)
 end
 
 function Ability:removeAura(guid)
@@ -2589,6 +2592,7 @@ local function UpdateDisplay()
 end
 
 local function UpdateCombat()
+	timer.combat = 0
 	local _, start, duration, remains, spellId
 	Player.ctime = GetTime()
 	Player.time = Player.ctime - Player.time_diff
@@ -3012,8 +3016,8 @@ end
 function events:PLAYER_EQUIPMENT_CHANGED()
 	Azerite:update()
 	UpdateAbilityData()
-	Trinket1.itemId = GetInventoryItemID('player', 13)
-	Trinket2.itemId = GetInventoryItemID('player', 14)
+	Trinket1.itemId = GetInventoryItemID('player', 13) or 0
+	Trinket2.itemId = GetInventoryItemID('player', 14) or 0
 	local _, i, equipType, hasCooldown
 	for i = 1, #inventoryItems do
 		inventoryItems[i].name, _, _, _, _, _, _, _, equipType, inventoryItems[i].icon = GetItemInfo(inventoryItems[i].itemId or 0)
@@ -3349,7 +3353,7 @@ function SlashCmdList.Automagically(msg, editbox)
 		if msg[2] then
 			Opt.conserve_mana = max(min(tonumber(msg[2]) or 60, 80), 20)
 		end
-		returnStatus('Mana conservation threshold (Arcane)', Opt.conserve_mana .. '%')
+		return Status('Mana conservation threshold (Arcane)', Opt.conserve_mana .. '%')
 	end
 	if msg[1] == 'reset' then
 		amagicPanel:ClearAllPoints()
@@ -3386,7 +3390,6 @@ function SlashCmdList.Automagically(msg, editbox)
 	} do
 		print('  ' .. SLASH_Automagically1 .. ' ' .. cmd)
 	end
-	print('Need to threaten with the wrath of doom? You can still use |cFFFFD000/wrath|r!')
 	print('Got ideas for improvement or found a bug? Talk to me on Battle.net:',
 		'|c' .. BATTLENET_FONT_COLOR:GenerateHexColor() .. '|HBNadd:Spy#1955|h[Spy#1955]|h|r')
 end
