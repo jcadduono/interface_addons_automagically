@@ -988,10 +988,84 @@ WintersChill.buff_duration = 1
 -- Azerite Traits
 local ArcanePummeling = Ability.add(270669, true, true, 270670)
 ArcanePummeling.buff_duration = 3
+local BlasterMaster = Ability.add(274596, true, true, 274598)
+BlasterMaster.buff_duration = 3
 local Preheat = Ability.add(273331, true, true, 273333)
 Preheat.buff_duration = 30
 local WintersReach = Ability.add(273346, true, true, 273347)
 WintersReach.buff_duration = 15
+-- Heart of Azeroth
+---- Major Essences
+local ConcentratedFlame = Ability.add(295373, true, true, 295378)
+ConcentratedFlame.buff_duration = 180
+ConcentratedFlame.cooldown_duration = 30
+ConcentratedFlame.requires_charge = true
+ConcentratedFlame.essence_id = 12
+ConcentratedFlame.essence_major = true
+ConcentratedFlame.dot = Ability.add(295368, false, true)
+ConcentratedFlame.dot.buff_duration = 6
+ConcentratedFlame.dot.essence_id = 12
+ConcentratedFlame.dot.essence_major = true
+local GuardianOfAzeroth = Ability.add(295840, false, true)
+GuardianOfAzeroth.cooldown_duration = 180
+GuardianOfAzeroth.essence_id = 14
+GuardianOfAzeroth.essence_major = true
+local FocusedAzeriteBeam = Ability.add(295258, false, true)
+FocusedAzeriteBeam.cooldown_duration = 90
+FocusedAzeriteBeam.essence_id = 5
+FocusedAzeriteBeam.essence_major = true
+local MemoryOfLucidDreams = Ability.add(298357, true, true)
+MemoryOfLucidDreams.buff_duration = 15
+MemoryOfLucidDreams.cooldown_duration = 120
+MemoryOfLucidDreams.essence_id = 27
+MemoryOfLucidDreams.essence_major = true
+local PurifyingBlast = Ability.add(295337, false, true, 295338)
+PurifyingBlast.cooldown_duration = 60
+PurifyingBlast.essence_id = 6
+PurifyingBlast.essence_major = true
+PurifyingBlast:autoAoe(true)
+local RippleInSpace = Ability.add(302731, true, true)
+RippleInSpace.buff_duration = 2
+RippleInSpace.cooldown_duration = 60
+RippleInSpace.essence_id = 15
+RippleInSpace.essence_major = true
+local TheUnboundForce = Ability.add(298452, false, true)
+TheUnboundForce.cooldown_duration = 45
+TheUnboundForce.essence_id = 28
+TheUnboundForce.essence_major = true
+local VisionOfPerfection = Ability.add(299370, true, true, 303345)
+VisionOfPerfection.buff_duration = 10
+VisionOfPerfection.essence_id = 22
+VisionOfPerfection.essence_major = true
+local WorldveinResonance = Ability.add(295186, true, true)
+WorldveinResonance.cooldown_duration = 60
+WorldveinResonance.essence_id = 4
+WorldveinResonance.essence_major = true
+---- Minor Essences
+local AncientFlame = Ability.add(295367, false, true)
+AncientFlame.buff_duration = 10
+AncientFlame.essence_id = 12
+local CondensedLifeForce = Ability.add(295367, false, true)
+CondensedLifeForce.essence_id = 14
+local FocusedEnergy = Ability.add(295248, true, true)
+FocusedEnergy.buff_duration = 4
+FocusedEnergy.essence_id = 5
+local Lifeblood = Ability.add(295137, true, true)
+Lifeblood.essence_id = 4
+local LucidDreams = Ability.add(298343, true, true)
+LucidDreams.buff_duration = 8
+LucidDreams.essence_id = 27
+local PurificationProtocol = Ability.add(295305, false, true)
+PurificationProtocol.essence_id = 6
+PurificationProtocol:autoAoe()
+local RealityShift = Ability.add(302952, true, true)
+RealityShift.buff_duration = 20
+RealityShift.cooldown_duration = 30
+RealityShift.essence_id = 15
+local RecklessForce = Ability.add(302917, true, true)
+RecklessForce.essence_id = 28
+local StriveForPerfection = Ability.add(299369, true, true)
+StriveForPerfection.essence_id = 22
 -- Racials
 
 -- Trinket Effects
@@ -1652,7 +1726,12 @@ actions.precombat+=/augmentation
 actions.precombat+=/arcane_intellect
 # This variable sets the time at which Rune of Power should start being saved for the next Combustion phase
 actions.precombat+=/variable,name=combustion_rop_cutoff,op=set,value=60
+actions.precombat+=/variable,name=combustion_on_use,op=set,value=equipped.notorious_aspirants_badge|equipped.notorious_gladiators_badge|equipped.sinister_gladiators_badge|equipped.sinister_aspirants_badge|equipped.dread_gladiators_badge|equipped.dread_aspirants_badge|equipped.dread_combatants_insignia|equipped.notorious_aspirants_medallion|equipped.notorious_gladiators_medallion|equipped.sinister_gladiators_medallion|equipped.sinister_aspirants_medallion|equipped.dread_gladiators_medallion|equipped.dread_aspirants_medallion|equipped.dread_combatants_medallion|equipped.ignition_mages_fuse|equipped.tzanes_barkspines|equipped.azurethos_singed_plumage|equipped.ancient_knot_of_wisdom|equipped.shockbiters_fang|equipped.neural_synapse_enhancer|equipped.balefire_branch
+actions.precombat+=/variable,name=font_double_on_use,op=set,value=equipped.azsharas_font_of_power&variable.combustion_on_use
+# Items that are used outside of Combustion are not used after this time if they would put a trinket used with Combustion on a sharded cooldown.
+actions.precombat+=/variable,name=on_use_cutoff,op=set,value=20*variable.combustion_on_use&!variable.font_double_on_use+40*variable.font_double_on_use+25*equipped.azsharas_font_of_power&!variable.font_double_on_use
 actions.precombat+=/snapshot_stats
+actions.precombat+=/use_item,name=azsharas_font_of_power
 actions.precombat+=/mirror_image
 actions.precombat+=/potion
 actions.precombat+=/pyroblast
@@ -1679,19 +1758,41 @@ actions.precombat+=/pyroblast
 		end
 	end
 --[[
+actions=counterspell
+actions+=/call_action_list,name=items_high_priority
 actions+=/mirror_image,if=buff.combustion.down
-# Use RoP if you will be able to have 2 charges ready for the next Combustion, if it's time to start Combustion phase, or if target will die before the next Combustion.
+actions+=/guardian_of_azeroth,if=cooldown.combustion.remains<10|target.time_to_die<cooldown.combustion.remains
+actions+=/concentrated_flame
+actions+=/focused_azerite_beam
+actions+=/purifying_blast
+actions+=/ripple_in_space
+actions+=/the_unbound_force
+actions+=/worldvein_resonance
 actions+=/rune_of_power,if=talent.firestarter.enabled&firestarter.remains>full_recharge_time|cooldown.combustion.remains>variable.combustion_rop_cutoff&buff.combustion.down|target.time_to_die<cooldown.combustion.remains&buff.combustion.down
-# Start the Combustion phase if Combustion will be off cooldown by the time Rune of Power is finished casting (or ASAP if not using RoP). Otherwise go to proper phase depending on which buffs are up.
 actions+=/call_action_list,name=combustion_phase,if=(talent.rune_of_power.enabled&cooldown.combustion.remains<=action.rune_of_power.cast_time|cooldown.combustion.ready)&!firestarter.active|buff.combustion.up
+actions+=/fire_blast,use_while_casting=1,use_off_gcd=1,if=(essence.memory_of_lucid_dreams.major|essence.memory_of_lucid_dreams.minor&azerite.blaster_master.enabled)&charges=max_charges&!buff.hot_streak.react&!(buff.heating_up.react&(buff.combustion.up&(action.fireball.in_flight|action.pyroblast.in_flight|action.scorch.executing)|target.health.pct<=30&action.scorch.executing))&!(!buff.heating_up.react&!buff.hot_streak.react&buff.combustion.down&(action.fireball.in_flight|action.pyroblast.in_flight))
 actions+=/call_action_list,name=rop_phase,if=buff.rune_of_power.up&buff.combustion.down
-# Pool Fire Blast and Phoenix Flames enough to make sure you are near max charges for the next Rune of Power or Combustion
-actions+=/variable,name=fire_blast_pooling,value=talent.rune_of_power.enabled&cooldown.rune_of_power.remains<cooldown.fire_blast.full_recharge_time&(cooldown.combustion.remains>variable.combustion_rop_cutoff|firestarter.active)&(cooldown.rune_of_power.remains<target.time_to_die|action.rune_of_power.charges>0)|cooldown.combustion.remains<action.fire_blast.full_recharge_time&!firestarter.active&cooldown.combustion.remains<target.time_to_die|talent.firestarter.enabled&firestarter.active&firestarter.remains<cooldown.fire_blast.full_recharge_time
+actions+=/variable,name=fire_blast_pooling,value=talent.rune_of_power.enabled&cooldown.rune_of_power.remains<cooldown.fire_blast.full_recharge_time&(cooldown.combustion.remains>variable.combustion_rop_cutoff|firestarter.active)&(cooldown.rune_of_power.remains<target.time_to_die|action.rune_of_power.charges>0)|cooldown.combustion.remains<action.fire_blast.full_recharge_time+cooldown.fire_blast.duration*azerite.blaster_master.enabled&!firestarter.active&cooldown.combustion.remains<target.time_to_die|talent.firestarter.enabled&firestarter.active&firestarter.remains<cooldown.fire_blast.full_recharge_time+cooldown.fire_blast.duration*azerite.blaster_master.enabled
 actions+=/variable,name=phoenix_pooling,value=talent.rune_of_power.enabled&cooldown.rune_of_power.remains<cooldown.phoenix_flames.full_recharge_time&cooldown.combustion.remains>variable.combustion_rop_cutoff&(cooldown.rune_of_power.remains<target.time_to_die|action.rune_of_power.charges>0)|cooldown.combustion.remains<action.phoenix_flames.full_recharge_time&cooldown.combustion.remains<target.time_to_die
 actions+=/call_action_list,name=standard_rotation
 ]]
 	if MirrorImage:usable() and Combustion:down() then
 		UseCooldown(MirrorImage)
+	end
+	if GuardianOfAzeroth:usable() and (Combustion:cooldown() < 10 or Target.timeToDie < Combustion:cooldown()) then
+		UseCooldown(GuardianOfAzeroth)
+	elseif ConcentratedFlame:usable() and ConcentratedFlame.dot:down() and not ConcentratedFlame:previous() then
+		UseCooldown(ConcentratedFlame)
+	elseif FocusedAzeriteBeam:usable() and not Player.moving then
+		UseCooldown(FocusedAzeriteBeam)
+	elseif PurifyingBlast:usable() then
+		UseCooldown(PurifyingBlast)
+	elseif RippleInSpace:usable() then
+		UseCooldown(RippleInSpace)
+	elseif TheUnboundForce:usable() then
+		UseCooldown(TheUnboundForce)
+	elseif WorldveinResonance:usable() and Lifeblood:stack() < 3 then
+		UseCooldown(WorldveinResonance)
 	end
 	if RuneOfPower:usable() and ((Firestarter.known and Firestarter:remains() > RuneOfPower:fullRechargeTime()) or (Combustion:down() and (Combustion:cooldown() > Player.combustion_rop_cutoff or Target.timeToDie < Combustion:cooldown()))) then
 		UseCooldown(RuneOfPower)
@@ -1700,6 +1801,9 @@ actions+=/call_action_list,name=standard_rotation
 	if (RuneOfPower.known and Combustion:cooldown() < RuneOfPower:castTime() or Combustion:ready()) and Firestarter:down() or Combustion:up() then
 		apl = self:combustion_phase()
 		if apl then return apl end
+	end
+	if FireBlast:usable() and (MemoryOfLucidDreams.known or LucidDreams.known and BlasterMaster.known) and FireBlast:charges() == FireBlast:maxCharges() and HotStreak:down() and (HeatingUp:up() and (Combustion:up() and (Fireball:traveling() or Pyroblast:traveling() or Scorch:casting()) or Target.healthPct <= 30 and Scorch:casting())) and not (HeatingUp:down() and HotStreak:down() and Combustion:down() and (Fireball:traveling() or Pyroblast:traveling())) then
+		UseExtra(FireBlast)
 	end
 	if RuneOfPower.known and RuneOfPower:up() and Combustion:down() then
 		apl = self:rop_phase()
@@ -1710,12 +1814,8 @@ end
 
 APL[SPEC.FIRE].active_talents = function(self)
 --[[
-# Living Bomb is used mostly on cooldown in any multitarget situation. Make sure we time the use such that it is exploding inside Combustion.
 actions.active_talents=living_bomb,if=active_enemies>1&buff.combustion.down&(cooldown.combustion.remains>cooldown.living_bomb.duration|cooldown.combustion.ready)
-# Meteor should be synced with Rune of Power if possible (and therefore also Combustion).
-actions.active_talents+=/meteor,if=buff.rune_of_power.up&(firestarter.remains>cooldown.meteor.duration|!firestarter.active)|cooldown.rune_of_power.remains>target.time_to_die&action.rune_of_power.charges<1|(cooldown.meteor.duration<cooldown.combustion.remains|cooldown.combustion.ready)&!talent.rune_of_power.enabled
-# Alexstrasza's Fury lets Dragon's Breath contribute to Hot Streak, so it should be used when there is not already a Hot Streak
-actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury.enabled&(buff.combustion.down&!buff.hot_streak.react|buff.combustion.up&action.fire_blast.charges<action.fire_blast.max_charges&!buff.hot_streak.react)
+actions.active_talents+=/meteor,if=buff.rune_of_power.up&(firestarter.remains>cooldown.meteor.duration|!firestarter.active)|cooldown.rune_of_power.remains>target.time_to_die&action.rune_of_power.charges<1|(cooldown.meteor.duration<cooldown.combustion.remains|cooldown.combustion.ready)&!talent.rune_of_power.enabled&(cooldown.meteor.duration<firestarter.remains|!talent.firestarter.enabled|!firestarter.active)
 ]]
 	if LivingBomb:usable() and Player.enemies > 1 and Combustion:down() and (Combustion:cooldown() > LivingBomb:cooldownDuration() or Combustion:ready()) then
 		return LivingBomb
@@ -1726,13 +1826,10 @@ actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury.enabled&(buf
 				UseCooldown(Meteor)
 			end
 		else
-			if Meteor:cooldownDuration() < Combustion:cooldown() or Combustion:ready() then
+			if (Meteor:cooldownDuration() < Combustion:cooldown() or Combustion:ready()) and (Meteor:cooldownDuration() < Firestarter:remains() or not Firestarter.known or not Firestarter:up()) then
 				UseCooldown(Meteor)
 			end
 		end
-	end
-	if AlexstraszasFury.known and DragonsBreath:usable() and HotStreak:down() and (Combustion:down() or FireBlast:charges() < FireBlast:maxCharges()) then
-		UseExtra(DragonsBreath)
 	end
 end
 
@@ -1740,38 +1837,55 @@ APL[SPEC.FIRE].combustion_phase = function(self)
 --[[
 # Combustion phase prepares abilities with a delay, then launches into the Combustion sequence
 actions.combustion_phase=lights_judgment,if=buff.combustion.down
+actions.combustion_phase+=/blood_of_the_enemy
+actions.combustion_phase+=/memory_of_lucid_dreams
+# During Combustion, Fire Blasts are used to generate Hot Streaks and minimize the amount of time spent executing other spells. For standard Fire, Fire Blasts are only used when Heating Up is active or when a Scorch cast is in progress and Heating Up and Hot Streak are not active. With Blaster Master and Flame On, Fire Blasts can additionally be used while Hot Streak and Heating Up are not active and a Pyroblast is in the air and also while casting Scorch even if Heating Up is already active. The latter allows two Hot Streak Pyroblasts to be cast in succession after the Scorch. Additionally with Blaster Master and Flame On, Fire Blasts should not be used unless Blaster Master is about to expire or there are more than enough Fire Blasts to extend Blaster Master to the end of Combustion.
+actions.combustion_phase+=/fire_blast,use_while_casting=1,use_off_gcd=1,if=charges>=1&((action.fire_blast.charges_fractional+(buff.combustion.remains-buff.blaster_master.duration)%cooldown.fire_blast.duration-(buff.combustion.remains)%(buff.blaster_master.duration-0.5))>=0|!azerite.blaster_master.enabled|!talent.flame_on.enabled|buff.combustion.remains<=buff.blaster_master.duration|buff.blaster_master.remains<0.5|equipped.hyperthread_wristwraps&cooldown.hyperthread_wristwraps_300142.remains<5)&buff.combustion.up&(!action.scorch.executing&!action.pyroblast.in_flight&buff.heating_up.up|action.scorch.executing&buff.hot_streak.down&(buff.heating_up.down|azerite.blaster_master.enabled)|azerite.blaster_master.enabled&talent.flame_on.enabled&action.pyroblast.in_flight&buff.heating_up.down&buff.hot_streak.down)
 actions.combustion_phase+=/rune_of_power,if=buff.combustion.down
-# Meteor and Living Bomb should be used before Combustion is activated, to save GCDs
+# With Blaster Master, a Fire Blast should be used while casting Rune of Power.
+actions.combustion_phase+=/fire_blast,use_while_casting=1,if=azerite.blaster_master.enabled&talent.flame_on.enabled&buff.blaster_master.down&(talent.rune_of_power.enabled&action.rune_of_power.executing&action.rune_of_power.execute_remains<0.6|(cooldown.combustion.ready|buff.combustion.up)&!talent.rune_of_power.enabled&!action.pyroblast.in_flight&!action.fireball.in_flight)
 actions.combustion_phase+=/call_action_list,name=active_talents
-actions.combustion_phase+=/combustion
+actions.combustion_phase+=/combustion,use_off_gcd=1,use_while_casting=1,if=((action.meteor.in_flight&action.meteor.in_flight_remains<=0.5)|!talent.meteor.enabled)&(buff.rune_of_power.up|!talent.rune_of_power.enabled)
 actions.combustion_phase+=/potion
 actions.combustion_phase+=/blood_fury
 actions.combustion_phase+=/berserking
 actions.combustion_phase+=/fireblood
 actions.combustion_phase+=/ancestral_call
-actions.combustion_phase+=/use_items
-# Instant Flamestrike has a slightly higher target threshold inside Combustion, even when using Flame Patch
-actions.combustion_phase+=/flamestrike,if=((talent.flame_patch.enabled&active_enemies>2)|active_enemies>6)&buff.hot_streak.react
-# It is currently a gain to use Pyroclasm procs inside Combustion
+actions.combustion_phase+=/flamestrike,if=((talent.flame_patch.enabled&active_enemies>2)|active_enemies>6)&buff.hot_streak.react&!azerite.blaster_master.enabled
 actions.combustion_phase+=/pyroblast,if=buff.pyroclasm.react&buff.combustion.remains>cast_time
 actions.combustion_phase+=/pyroblast,if=buff.hot_streak.react
-actions.combustion_phase+=/fire_blast,if=buff.heating_up.react
+actions.combustion_phase+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.up
 actions.combustion_phase+=/phoenix_flames
-actions.combustion_phase+=/scorch,if=buff.combustion.remains>cast_time
+actions.combustion_phase+=/scorch,if=buff.combustion.remains>cast_time&buff.combustion.up|buff.combustion.down
 actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active_enemies>1
-actions.combustion_phase+=/dragons_breath,if=buff.combustion.remains<gcd.max
+actions.combustion_phase+=/dragons_breath,if=buff.combustion.remains<gcd.max&buff.combustion.up
 actions.combustion_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.enabled
 ]]
-	if Combustion:down() then
-		if RuneOfPower:usable() then
-			UseCooldown(RuneOfPower)
+	if MemoryOfLucidDreams:usable() then
+		UseCooldown(MemoryOfLucidDreams)
+	end
+	if FireBlast:usable() and Combustion:up() and ((FireBlast:chargesFractional() + (Combustion:remains() - BlasterMaster:duration()) / FireBlast:cooldownDuration() - (Combustion:remains() / (BlasterMaster:duration() - 0.5)) >= 0) or not BlasterMaster.known or not FlameOn.known or Combustion:remains() <= BlasterMaster:duration() or BlasterMaster:remains() < 0.5) and ((not Scorch:casting() and not Pyroblast:traveling() and HeatingUp:up()) or (Scorch:casting() and HotStreak:down() and (HeatingUp:down() or BlasterMaster.known and FlameOn.known and Pyroblast:traveling() and HeatingUp:down() and HotStreak:down()))) then
+		UseExtra(FireBlast)
+	end 
+	if RuneOfPower:usable() and Combustion:down() then
+		UseCooldown(RuneOfPower)
+	end
+	if FireBlast:usable() and BlasterMaster.known and FlameOn.known and BlasterMaster:down() then
+		if RuneOfPower.known then
+			if RuneOfPower:casting() and Player.execute_remains < 0.6 then
+				UseExtra(FireBlast)
+			end
+		elseif (Combustion:ready() or Combustion:up()) and not (Pyroblast:traveling() or Fireball:traveling()) then
+			UseExtra(FireBlast)
 		end
-		local apl = self:active_talents()
-		if apl then return apl end
-		if Combustion:usable() then
-			UseCooldown(Combustion)
-		end
-		return
+	end
+	local apl = self:active_talents()
+	if apl then return apl end
+	if Combustion:usable() and (not Meteor.known or Meteor:cooldown() > 43) and (not RuneOfPower.known or RuneOfPower:up()) then
+		UseCooldown(Combustion)
+	end
+	if Opt.pot and Target.boss and BattlePotionOfIntellect:usable() then
+		UseCooldown(BattlePotionOfIntellect)
 	end
 	if Opt.trinket then
 		if Trinket1:usable() then
@@ -1780,7 +1894,7 @@ actions.combustion_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.
 			UseCooldown(Trinket2)
 		end
 	end
-	if Flamestrike:usable() and HotStreak:up() and Player.enemies > (FlamePatch.known and 2 or 6) then
+	if Flamestrike:usable() and not BlasterMaster.known and HotStreak:up() and Player.enemies > (FlamePatch.known and 2 or 6) then
 		return Flamestrike
 	end
 	if Pyroblast:usable() then
@@ -1790,14 +1904,14 @@ actions.combustion_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.
 		if HotStreak:up() then
 			return Pyroblast
 		end
-	end
-	if FireBlast:usable() and HeatingUp:up() then
-		UseExtra(FireBlast)
+		if Scorch:casting() and HeatingUp:up() and Combustion:up() then
+			return Pyroblast
+		end
 	end
 	if PhoenixFlames:usable() then
 		return PhoenixFlames
 	end
-	if Scorch:usable() and Combustion:remains() > Scorch:castTime() then
+	if Scorch:usable() and (Combustion:down() or Combustion:remains() > Scorch:castTime()) then
 		return Scorch
 	end
 	if Combustion:remains() < Player.gcd then
@@ -1815,26 +1929,19 @@ end
 
 APL[SPEC.FIRE].rop_phase = function(self)
 --[[
-# Rune of Power phase occurs directly after Combustion, or when it comes off cooldown and both charges will be available again for the next Combustion
 actions.rop_phase=rune_of_power
-# Hot Streak should be consumed immediately. Instant Flamestrike is used in any multi target situation with Flame Patch, or for 5+ enemies without. Otherwise, Pyroblast.
 actions.rop_phase+=/flamestrike,if=((talent.flame_patch.enabled&active_enemies>1)|active_enemies>4)&buff.hot_streak.react
 actions.rop_phase+=/pyroblast,if=buff.hot_streak.react
-# If there is no Heating Up or Hot Streak proc, use Fire Blast to prepare one, assuming another guaranteed critical ability is available (i.e. another charge of Fire Blast, Phoenix Flames, Scorch with Searing Touch, Firestarter is active, or Dragon's Breath with Alexstrasza's Fury talented)
-actions.rop_phase+=/fire_blast,if=!buff.heating_up.react&!buff.hot_streak.react&!prev_off_gcd.fire_blast&(action.fire_blast.charges>=2|action.phoenix_flames.charges>=1|talent.alexstraszas_fury.enabled&cooldown.dragons_breath.ready|talent.searing_touch.enabled&target.health.pct<=30|firestarter.active)
-# Abilties like Meteor have a high priority to ensure they hit during the buff window for RoP
+actions.rop_phase+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=(cooldown.combustion.remains>0|firestarter.active&buff.rune_of_power.up)&(!buff.heating_up.react&!buff.hot_streak.react&!prev_off_gcd.fire_blast&(action.fire_blast.charges>=2|(action.phoenix_flames.charges>=1&talent.phoenix_flames.enabled)|(talent.alexstraszas_fury.enabled&cooldown.dragons_breath.ready)|(talent.searing_touch.enabled&target.health.pct<=30)|(talent.firestarter.enabled&firestarter.active)))
 actions.rop_phase+=/call_action_list,name=active_talents
-# It is currently a gain to use the Pyroclasm proc inside RoP, assuming the cast will finish before rune expires
 actions.rop_phase+=/pyroblast,if=buff.pyroclasm.react&cast_time<buff.pyroclasm.remains&buff.rune_of_power.remains>cast_time
-# Fire Blast should be used to convert to Hot Streak, assuming it was not just used
-actions.rop_phase+=/fire_blast,if=!prev_off_gcd.fire_blast&buff.heating_up.react
-# Use Phoenix Flames to convert to Hot Streak
+actions.rop_phase+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=(cooldown.combustion.remains>0|firestarter.active&buff.rune_of_power.up)&(buff.heating_up.react&(target.health.pct>=30|!talent.searing_touch.enabled))
+actions.rop_phase+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=(cooldown.combustion.remains>0|firestarter.active&buff.rune_of_power.up)&talent.searing_touch.enabled&target.health.pct<=30&(buff.heating_up.react&!action.scorch.executing|!buff.heating_up.react&!buff.hot_streak.react)
+actions.rop_phase+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.up&talent.searing_touch.enabled&target.health.pct<=30&(!talent.flame_patch.enabled|active_enemies=1)
 actions.rop_phase+=/phoenix_flames,if=!prev_gcd.1.phoenix_flames&buff.heating_up.react
-# During the execute phase, use Scorch to generate procs
 actions.rop_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.enabled
 actions.rop_phase+=/dragons_breath,if=active_enemies>2
 actions.rop_phase+=/flamestrike,if=(talent.flame_patch.enabled&active_enemies>2)|active_enemies>5
-# Without another proc generating method, fish for a crit using Fireball. If you have Heating Up, you convert at the end of cast with Fire Blast or Phoenix Flames, then Pyroblast
 actions.rop_phase+=/fireball
 ]]
 	if RuneOfPower:down() then
@@ -1880,33 +1987,21 @@ end
 
 APL[SPEC.FIRE].standard_rotation = function(self)
 --[[
-# With Flame Patch, Flamestrike is the go to choice for non-single target scenarios, otherwise it is only used for 5+ targets
 actions.standard_rotation=flamestrike,if=((talent.flame_patch.enabled&active_enemies>1&!firestarter.active)|active_enemies>4)&buff.hot_streak.react
-# If Hot Streak would expire before Fireball can be cast to fish, just cast Pyroblast
 actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&buff.hot_streak.remains<action.fireball.execute_time
-# Consume Hot Streak if Fireball was just cast to attempt to fish
 actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&(prev_gcd.1.fireball|firestarter.active|action.pyroblast.in_flight)
-# Use Phoenix Flames if you are about to cap on charges and there are 3 or more enemies, assuming you're not pooling for Rune or Combustion
 actions.standard_rotation+=/phoenix_flames,if=charges>=3&active_enemies>2&!variable.phoenix_pooling
-# Scorch has no travel time, so there's no point in trying to fish during execute with Searing Touch
 actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&target.health.pct<=30&talent.searing_touch.enabled
-# Use Pyroclasm procs as you get them, assuming you will still have the proc by the end of the cast
 actions.standard_rotation+=/pyroblast,if=buff.pyroclasm.react&cast_time<buff.pyroclasm.remains
-# Fire Blast is used to convert Heating Up into Hot Streak, but should be pooled for Rune of Power (if talented) and Combustion
-actions.standard_rotation+=/fire_blast,if=!talent.kindling.enabled&buff.heating_up.react&!variable.fire_blast_pooling|target.time_to_die<4
-# With Kindling talented, pooling for Rune isn't beneficial. Instead, just use Fire Blast to convert Heating Up procs, and pool for Combustion
+actions.standard_rotation+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=(cooldown.combustion.remains>0&buff.rune_of_power.down|firestarter.active)&!talent.kindling.enabled&!variable.fire_blast_pooling&(((action.fireball.executing|action.pyroblast.executing)&(buff.heating_up.react|firestarter.active&!buff.hot_streak.react&!buff.heating_up.react))|(talent.searing_touch.enabled&target.health.pct<=30&(buff.heating_up.react&!action.scorch.executing|!buff.hot_streak.react&!buff.heating_up.react&action.scorch.executing&!action.pyroblast.in_flight&!action.fireball.in_flight))|(firestarter.active&(action.pyroblast.in_flight|action.fireball.in_flight)&!buff.heating_up.react&!buff.hot_streak.react))
 actions.standard_rotation+=/fire_blast,if=talent.kindling.enabled&buff.heating_up.react&(cooldown.combustion.remains>full_recharge_time+2+talent.kindling.enabled|firestarter.remains>full_recharge_time|(!talent.rune_of_power.enabled|cooldown.rune_of_power.remains>target.time_to_die&action.rune_of_power.charges<1)&cooldown.combustion.remains>target.time_to_die)
-# Phoenix Flames should be pooled for Rune of Power and Combustion, but can be used to convert a Heating Up proc if there is no Fire Blast, or with no proc at all if Fire Blast or Scorch with Searing Touch is available
+actions.standard_rotation+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.up&talent.searing_touch.enabled&target.health.pct<=30&((talent.flame_patch.enabled&active_enemies=1&!firestarter.active)|(active_enemies<4&!talent.flame_patch.enabled))
 actions.standard_rotation+=/phoenix_flames,if=(buff.heating_up.react|(!buff.hot_streak.react&(action.fire_blast.charges>0|talent.searing_touch.enabled&target.health.pct<=30)))&!variable.phoenix_pooling
-# Alexstrasza's Fury can be used during the standard rotation to help squeeze out more Hot Streaks, while Living Bomb is used on CD in multitarget
 actions.standard_rotation+=/call_action_list,name=active_talents
-# Dragon's Breath on cooldown is a gain even without talents in AoE scenarios
 actions.standard_rotation+=/dragons_breath,if=active_enemies>1
-# Below 30%, Scorch replaces Fireball as a filler with Searing Touch talented. A single Scorch is occasionally woven into the rotation to keep up the Preheat buff if that trait is present
-actions.standard_rotation+=/scorch,if=(target.health.pct<=30&talent.searing_touch.enabled)|(azerite.preheat.enabled&debuff.preheat.down)
-# Fireball is the standard filler spell
+actions.standard_rotation+=/call_action_list,name=items_low_priority
+actions.standard_rotation+=/scorch,if=target.health.pct<=30&talent.searing_touch.enabled
 actions.standard_rotation+=/fireball
-# Scorch can be cast while moving, so it is used in scenarios where Fireball cannot be.
 actions.standard_rotation+=/scorch
 ]]
 	if Flamestrike:usable() and HotStreak:up() and Player.enemies > (FlamePatch.known and Firestarter:down() and 1 or 4) then
@@ -1937,8 +2032,8 @@ actions.standard_rotation+=/scorch
 	end
 	if FireBlast:usable() then
 		Player.fire_blast_pooling = (RuneOfPower.known and RuneOfPower:cooldown() < FireBlast:fullRechargeTime() and (Combustion:cooldown() > Player.combustion_rop_cutoff or Firestarter:up()) and (RuneOfPower:cooldown() < Target.timeToDie or RuneOfPower:charges() > 0)) or
-			(Combustion:cooldown() < FireBlast:fullRechargeTime() and Firestarter:down() and Combustion:cooldown() < Target.timeToDie) or
-			(Firestarter.known and Firestarter:up() and Firestarter:remains() < FireBlast:fullRechargeTime())
+			(Combustion:cooldown() < (FireBlast:fullRechargeTime() + (BlasterMaster.known and FireBlast:cooldownDuration() or 0)) and Firestarter:down() and Combustion:cooldown() < Target.timeToDie) or
+			(Firestarter.known and Firestarter:up() and Firestarter:remains() < (FireBlast:fullRechargeTime() + (BlasterMaster.known and FireBlast:cooldownDuration() or 0)))
 		if Target.timeToDie < 4 then
 			UseExtra(FireBlast)
 		elseif Kindling.known then
@@ -2989,6 +3084,9 @@ local function UpdateAbilityData()
 	Waterbolt.known = SummonWaterElemental.known
 	WintersChill.known = BrainFreeze.known
 	HeatingUp.known = HotStreak.known
+	if FlameOn.known then
+		FireBlast.cooldown_duration = 10
+	end
 
 	abilities.bySpellId = {}
 	abilities.velocity = {}
