@@ -135,6 +135,7 @@ local Player = {
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
 		[165581] = true, -- Crest of Pa'ku (Horde)
+		[174044] = true, -- Humming Black Dragonscale (parachute)
 	},
 }
 
@@ -358,6 +359,7 @@ local autoAoe = {
 	blacklist = {},
 	ignored_units = {
 		[120651] = true, -- Explosives (Mythic+ affix)
+		[161895] = true, -- Thing From Beyond (40+ Corruption)
 	},
 }
 
@@ -1547,11 +1549,11 @@ function ArcaneMissiles:Cost()
 	return Ability.Cost(self)
 end
 
-function RuleOfThrees:Up()
+function RuleOfThrees:Remains()
 	if ArcaneBlast:Casting() then
-		return false
+		return 0
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function PresenceOfMind:Cooldown()
@@ -1596,18 +1598,18 @@ function TimeWarp:Usable()
 	return Ability.Usable(self)
 end
 
-function BrainFreeze:Up()
+function BrainFreeze:Remains()
 	if Ebonbolt:Casting() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
-function GlacialSpike:Up()
+function GlacialSpike:Remains()
 	if Target.stunnable and self:Casting() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function GlacialSpike:Usable()
@@ -1617,11 +1619,11 @@ function GlacialSpike:Usable()
 	return Ability.Usable(self)
 end
 
-function WintersChill:Up()
+function WintersChill:Remains()
 	if Flurry:Traveling() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function Icicles:Stack()
@@ -1637,7 +1639,7 @@ end
 
 function RuneOfPower:Remains()
 	if self:Casting() then
-		return self.buff_duration
+		return self:Duration()
 	end
 	return max((self.last_used or 0) + self.buff_duration - Player.time - Player.execute_remains, 0)
 end
@@ -1653,8 +1655,8 @@ function Firestarter:Remains()
 	return health_above_90 / Target.healthLostPerSec
 end
 
-function SearingTouch:Up()
-	return SearingTouch.known and Target.healthPercentage < 30
+function SearingTouch:Remains()
+	return SearingTouch.known and Target.healthPercentage < 30 and 600
 end
 
 function HeatingUp:Remains()
@@ -1665,14 +1667,14 @@ function HeatingUp:Remains()
 		if Ability.Up(HotStreak) then
 			return 0
 		end
-		return self.buff_duration
+		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
 
 function HotStreak:Remains()
-	if Scorch:Casting() and SearingTouch:Up() and Ability.Up(HeatingUp) and not Ability.Up(HotStreak) then
-		return self.buff_duration
+	if Scorch:Casting() and SearingTouch:Up() and Ability.Up(HeatingUp) then
+		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
