@@ -135,6 +135,7 @@ local Player = {
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
 		[165581] = true, -- Crest of Pa'ku (Horde)
+		[174044] = true, -- Humming Black Dragonscale (parachute)
 	},
 }
 
@@ -358,6 +359,7 @@ local autoAoe = {
 	blacklist = {},
 	ignored_units = {
 		[120651] = true, -- Explosives (Mythic+ affix)
+		[161895] = true, -- Thing From Beyond (40+ Corruption)
 	},
 }
 
@@ -1236,9 +1238,6 @@ function Azerite:Update()
 	for pid in next, self.essences do
 		self.essences[pid] = nil
 	end
-	if UnitEffectiveLevel('player') < 110 then
-		return -- disable all Azerite/Essences for players scaled under 110
-	end
 	for _, loc in next, self.locations do
 		if GetInventoryItemID('player', loc:GetEquipmentSlot()) and C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItem(loc) then
 			for _, slot in next, C_AzeriteEmpoweredItem.GetAllTierInfo(loc) do
@@ -1547,11 +1546,11 @@ function ArcaneMissiles:Cost()
 	return Ability.Cost(self)
 end
 
-function RuleOfThrees:Up()
+function RuleOfThrees:Remains()
 	if ArcaneBlast:Casting() then
-		return false
+		return 0
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function PresenceOfMind:Cooldown()
@@ -1596,18 +1595,18 @@ function TimeWarp:Usable()
 	return Ability.Usable(self)
 end
 
-function BrainFreeze:Up()
+function BrainFreeze:Remains()
 	if Ebonbolt:Casting() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
-function GlacialSpike:Up()
+function GlacialSpike:Remains()
 	if Target.stunnable and self:Casting() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function GlacialSpike:Usable()
@@ -1617,11 +1616,11 @@ function GlacialSpike:Usable()
 	return Ability.Usable(self)
 end
 
-function WintersChill:Up()
+function WintersChill:Remains()
 	if Flurry:Traveling() then
-		return true
+		return self:Duration()
 	end
-	return Ability.Up(self)
+	return Ability.Remains(self)
 end
 
 function Icicles:Stack()
@@ -1637,7 +1636,7 @@ end
 
 function RuneOfPower:Remains()
 	if self:Casting() then
-		return self.buff_duration
+		return self:Duration()
 	end
 	return max((self.last_used or 0) + self.buff_duration - Player.time - Player.execute_remains, 0)
 end
@@ -1653,8 +1652,8 @@ function Firestarter:Remains()
 	return health_above_90 / Target.healthLostPerSec
 end
 
-function SearingTouch:Up()
-	return SearingTouch.known and Target.healthPercentage < 30
+function SearingTouch:Remains()
+	return SearingTouch.known and Target.healthPercentage < 30 and 600
 end
 
 function HeatingUp:Remains()
@@ -1665,14 +1664,14 @@ function HeatingUp:Remains()
 		if Ability.Up(HotStreak) then
 			return 0
 		end
-		return self.buff_duration
+		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
 
 function HotStreak:Remains()
-	if Scorch:Casting() and SearingTouch:Up() and Ability.Up(HeatingUp) and not Ability.Up(HotStreak) then
-		return self.buff_duration
+	if Scorch:Casting() and SearingTouch:Up() and Ability.Up(HeatingUp) then
+		return self:Duration()
 	end
 	return Ability.Remains(self)
 end
@@ -1870,7 +1869,6 @@ actions.burn+=/arcane_barrage
 			return ArcaneExplosion
 		end
 	else
-		print('am usable', ArcaneMissiles:Usable(), 'cc up', Clearcasting:Up())
 		if ArcaneMissiles:Usable() and Clearcasting:Up() and (Amplification.known or (not Overpowered.known and ArcanePummeling:AzeriteRank() >= 2) or ArcanePower:Down()) then
 			return ArcaneMissiles
 		end
@@ -2978,8 +2976,8 @@ function events:ADDON_LOADED(name)
 			print('It looks like this is your first time running ' .. name .. ', why don\'t you take some time to familiarize yourself with the commands?')
 			print('Type |cFFFFD000' .. SLASH_Automagically1 .. '|r for a list of commands.')
 		end
-		if UnitLevel('player') < 110 then
-			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 110, and almost certainly will not operate properly!')
+		if UnitLevel('player') < 10 then
+			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 		InitOpts()
 		Azerite:Init()
