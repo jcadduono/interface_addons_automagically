@@ -1,7 +1,9 @@
+local ADDON = 'Automagically'
 if select(2, UnitClass('player')) ~= 'MAGE' then
-	DisableAddOn('Automagically')
+	DisableAddOn(ADDON)
 	return
 end
+local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
 
 -- copy heavily accessed global functions into local scope for performance
 local GetSpellCooldown = _G.GetSpellCooldown
@@ -20,15 +22,15 @@ local function startsWith(str, start) -- case insensitive check to see if a stri
 	if type(str) ~= 'string' then
 		return false
 	end
-	return string.lower(str:sub(1, start:len())) == start:lower()
+   return string.lower(str:sub(1, start:len())) == start:lower()
 end
 -- end useful functions
 
 Automagically = {}
-local Opt -- use this as a local table reference to Automagically
+local Opt
 
 SLASH_Automagically1, SLASH_Automagically2, SLASH_Automagically3 = '/am', '/amagic', '/auto'
-BINDING_HEADER_AUTOMAGICALLY = 'Automagically'
+BINDING_HEADER_AUTOMAGICALLY = ADDON
 
 local function InitOpts()
 	local function SetDefaults(t, ref)
@@ -86,6 +88,7 @@ local function InitOpts()
 		aoe = false,
 		auto_aoe = false,
 		auto_aoe_ttl = 10,
+		cd_ttd = 8,
 		pot = false,
 		trinket = true,
 		conserve_mana = 60,
@@ -131,11 +134,12 @@ local Player = {
 	mana_max = 0,
 	mana_regen = 0,
 	arcane_charges = 0,
+	arcane_charges_max = 0,
+	moving = false,
+	movement_speed = 100,
 	last_swing_taken = 0,
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
-		[165581] = true, -- Crest of Pa'ku (Horde)
-		[174044] = true, -- Humming Black Dragonscale (parachute)
 	},
 }
 
@@ -143,40 +147,19 @@ local Player = {
 local Target = {
 	boss = false,
 	guid = 0,
-	healthArray = {},
+	health_array = {},
 	hostile = false,
 	estimated_range = 30,
 }
 
--- Azerite trait API access
-local Azerite = {}
-
--- base mana for each level
+-- base mana by player level
 local BaseMana = {
-	145,        160,    175,    190,    205,    -- 5
-	220,        235,    250,    290,    335,    -- 10
-	390,        445,    510,    580,    735,    -- 15
-	825,        865,    910,    950,    995,    -- 20
-	1060,       1125,   1195,   1405,   1490,   -- 25
-	1555,       1620,   1690,   1760,   1830,   -- 30
-	2110,       2215,   2320,   2425,   2540,   -- 35
-	2615,       2695,   3025,   3110,   3195,   -- 40
-	3270,       3345,   3420,   3495,   3870,   -- 45
-	3940,       4015,   4090,   4170,   4575,   -- 50
-	4660,       4750,   4835,   5280,   5380,   -- 55
-	5480,       5585,   5690,   5795,   6300,   -- 60
-	6420,       6540,   6660,   6785,   6915,   -- 65
-	7045,       7175,   7310,   7915,   8065,   -- 70
-	8215,       8370,   8530,   8690,   8855,   -- 75
-	9020,       9190,   9360,   10100,  10290,  -- 80
-	10485,      10680,  10880,  11085,  11295,  -- 85
-	11505,      11725,  12605,  12845,  13085,  -- 90
-	13330,      13585,  13840,  14100,  14365,  -- 95
-	14635,      15695,  15990,  16290,  16595,  -- 100
-	16910,      17230,  17550,  17880,  18220,  -- 105
-	18560,      18910,  19265,  19630,  20000,  -- 110
-	35985,      42390,  48700,  54545,  59550,  -- 115
-	64700,      68505,  72450,  77400,  100000  -- 120
+	52,   54,   57,   60,   62,   66,   69,   72,   76,   80,
+	86,   93,   101,  110,  119,  129,  140,  152,  165,  178,
+	193,  210,  227,  246,  267,  289,  314,  340,  369,  400,
+	433,  469,  509,  551,  598,  648,  702,  761,  825,  894,
+	969,  1050, 1138, 1234, 1337, 1449, 1571, 1702, 1845, 2000,
+	2349, 2759, 3241, 3807, 4472, 5253, 6170, 7247, 8513, 10000
 }
 
 local amagicPanel = CreateFrame('Frame', 'amagicPanel', UIParent)
@@ -190,7 +173,7 @@ amagicPanel.icon:SetAllPoints(amagicPanel)
 amagicPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 amagicPanel.border = amagicPanel:CreateTexture(nil, 'ARTWORK')
 amagicPanel.border:SetAllPoints(amagicPanel)
-amagicPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+amagicPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 amagicPanel.border:Hide()
 amagicPanel.dimmer = amagicPanel:CreateTexture(nil, 'BORDER')
 amagicPanel.dimmer:SetAllPoints(amagicPanel)
@@ -242,7 +225,7 @@ amagicPreviousPanel.icon:SetAllPoints(amagicPreviousPanel)
 amagicPreviousPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 amagicPreviousPanel.border = amagicPreviousPanel:CreateTexture(nil, 'ARTWORK')
 amagicPreviousPanel.border:SetAllPoints(amagicPreviousPanel)
-amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 local amagicCooldownPanel = CreateFrame('Frame', 'amagicCooldownPanel', UIParent)
 amagicCooldownPanel:SetSize(64, 64)
 amagicCooldownPanel:SetFrameStrata('BACKGROUND')
@@ -256,7 +239,7 @@ amagicCooldownPanel.icon:SetAllPoints(amagicCooldownPanel)
 amagicCooldownPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 amagicCooldownPanel.border = amagicCooldownPanel:CreateTexture(nil, 'ARTWORK')
 amagicCooldownPanel.border:SetAllPoints(amagicCooldownPanel)
-amagicCooldownPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+amagicCooldownPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 amagicCooldownPanel.cd = CreateFrame('Cooldown', nil, amagicCooldownPanel, 'CooldownFrameTemplate')
 amagicCooldownPanel.cd:SetAllPoints(amagicCooldownPanel)
 local amagicInterruptPanel = CreateFrame('Frame', 'amagicInterruptPanel', UIParent)
@@ -272,9 +255,10 @@ amagicInterruptPanel.icon:SetAllPoints(amagicInterruptPanel)
 amagicInterruptPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 amagicInterruptPanel.border = amagicInterruptPanel:CreateTexture(nil, 'ARTWORK')
 amagicInterruptPanel.border:SetAllPoints(amagicInterruptPanel)
-amagicInterruptPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+amagicInterruptPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 amagicInterruptPanel.cast = CreateFrame('Cooldown', nil, amagicInterruptPanel, 'CooldownFrameTemplate')
 amagicInterruptPanel.cast:SetAllPoints(amagicInterruptPanel)
+amagicInterruptPanel.cast:SetDrawBling(false)
 local amagicExtraPanel = CreateFrame('Frame', 'amagicExtraPanel', UIParent)
 amagicExtraPanel:SetFrameStrata('BACKGROUND')
 amagicExtraPanel:SetSize(64, 64)
@@ -288,7 +272,7 @@ amagicExtraPanel.icon:SetAllPoints(amagicExtraPanel)
 amagicExtraPanel.icon:SetTexCoord(0.05, 0.95, 0.05, 0.95)
 amagicExtraPanel.border = amagicExtraPanel:CreateTexture(nil, 'ARTWORK')
 amagicExtraPanel.border:SetAllPoints(amagicExtraPanel)
-amagicExtraPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+amagicExtraPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 
 -- Start AoE
 
@@ -299,22 +283,20 @@ Player.target_modes = {
 	[SPEC.ARCANE] = {
 		{1, ''},
 		{2, '2'},
-		{3, '3+'},
-		{6, '6+'},
+		{3, '3'},
+		{4, '4+'},
 	},
 	[SPEC.FIRE] = {
 		{1, ''},
 		{2, '2'},
-		{3, '3+'},
-		{5, '5+'},
-		{7, '7+'},
+		{3, '3'},
+		{4, '4+'},
 	},
 	[SPEC.FROST] = {
 		{1, ''},
 		{2, '2'},
 		{3, '3'},
-		{4, '4'},
-		{5, '5+'},
+		{4, '4+'},
 	}
 }
 
@@ -359,7 +341,6 @@ local autoAoe = {
 	blacklist = {},
 	ignored_units = {
 		[120651] = true, -- Explosives (Mythic+ affix)
-		[161895] = true, -- Thing From Beyond (40+ Corruption)
 	},
 }
 
@@ -445,7 +426,8 @@ local abilities = {
 
 function Ability:Add(spellId, buff, player, spellId2)
 	local ability = {
-		spellId = spellId,
+		spellIds = type(spellId) == 'table' and spellId or { spellId },
+		spellId = 0,
 		spellId2 = spellId2,
 		name = false,
 		icon = false,
@@ -486,7 +468,7 @@ function Ability:Ready(seconds)
 	return self:Cooldown() <= (seconds or 0)
 end
 
-function Ability:Usable()
+function Ability:Usable(seconds)
 	if not self.known then
 		return false
 	end
@@ -499,7 +481,7 @@ function Ability:Usable()
 	if self.requires_charge and self:Charges() == 0 then
 		return false
 	end
-	return self:Ready()
+	return self:Ready(seconds)
 end
 
 function Ability:Remains()
@@ -511,8 +493,7 @@ function Ability:Remains()
 		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
 			return 0
-		end
-		if self:Match(id) then
+		elseif self:Match(id) then
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
@@ -529,12 +510,12 @@ function Ability:Refreshable()
 	return self:Down()
 end
 
-function Ability:Up()
-	return self:Remains() > 0
+function Ability:Up(condition)
+	return self:Remains(condition) > 0
 end
 
-function Ability:Down()
-	return not self:Up()
+function Ability:Down(condition)
+	return self:Remains(condition) <= 0
 end
 
 function Ability:SetVelocity(velocity)
@@ -598,8 +579,7 @@ function Ability:Stack()
 		_, _, count, _, _, expires, _, _, _, id = UnitAura(self.auraTarget, i, self.auraFilter)
 		if not id then
 			return 0
-		end
-		if self:Match(id) then
+		elseif self:Match(id) then
 			return (expires == 0 or expires - Player.ctime > Player.execute_remains) and count or 0
 		end
 	end
@@ -659,10 +639,6 @@ function Ability:CastRegen()
 	return Player.mana_regen * self:CastTime() - self:Cost()
 end
 
-function Ability:WontCapMana(reduction)
-	return (Player.mana + self:CastRegen()) < (Player.mana_max - (reduction or 5))
-end
-
 function Ability:Previous(n)
 	local i = n or 1
 	if Player.ability_casting then
@@ -672,10 +648,6 @@ function Ability:Previous(n)
 		i = i - 1
 	end
 	return Player.previous_gcd[i] == self
-end
-
-function Ability:AzeriteRank()
-	return Azerite.traits[self.spellId] or 0
 end
 
 function Ability:AutoAoe(removeUnaffected, trigger)
@@ -1036,104 +1008,17 @@ local Icicles = Ability:Add(76613, true, true, 205473)
 Icicles.buff_duration = 60
 local WintersChill = Ability:Add(228358, false, true)
 WintersChill.buff_duration = 1
--- Heart of Azeroth
----- Azerite Traits
-local ArcanePummeling = Ability:Add(270669, true, true, 270670)
-ArcanePummeling.buff_duration = 3
-local BlasterMaster = Ability:Add(274596, true, true, 274598)
-BlasterMaster.buff_duration = 3
-local Preheat = Ability:Add(273331, true, true, 273333)
-Preheat.buff_duration = 30
-local WintersReach = Ability:Add(273346, true, true, 273347)
-WintersReach.buff_duration = 15
----- Major Essences
-local BloodOfTheEnemy = Ability:Add(298277, false, true)
-BloodOfTheEnemy.buff_duration = 10
-BloodOfTheEnemy.cooldown_duration = 120
-BloodOfTheEnemy.essence_id = 23
-BloodOfTheEnemy.essence_major = true
-local ConcentratedFlame = Ability:Add(295373, true, true, 295378)
-ConcentratedFlame.buff_duration = 180
-ConcentratedFlame.cooldown_duration = 30
-ConcentratedFlame.requires_charge = true
-ConcentratedFlame.essence_id = 12
-ConcentratedFlame.essence_major = true
-ConcentratedFlame:SetVelocity(40)
-ConcentratedFlame.dot = Ability:Add(295368, false, true)
-ConcentratedFlame.dot.buff_duration = 6
-ConcentratedFlame.dot.tick_interval = 2
-ConcentratedFlame.dot.essence_id = 12
-ConcentratedFlame.dot.essence_major = true
-local GuardianOfAzeroth = Ability:Add(295840, false, true)
-GuardianOfAzeroth.cooldown_duration = 180
-GuardianOfAzeroth.essence_id = 14
-GuardianOfAzeroth.essence_major = true
-local FocusedAzeriteBeam = Ability:Add(295258, false, true)
-FocusedAzeriteBeam.cooldown_duration = 90
-FocusedAzeriteBeam.essence_id = 5
-FocusedAzeriteBeam.essence_major = true
-local MemoryOfLucidDreams = Ability:Add(298357, true, true)
-MemoryOfLucidDreams.buff_duration = 15
-MemoryOfLucidDreams.cooldown_duration = 120
-MemoryOfLucidDreams.essence_id = 27
-MemoryOfLucidDreams.essence_major = true
-local PurifyingBlast = Ability:Add(295337, false, true, 295338)
-PurifyingBlast.cooldown_duration = 60
-PurifyingBlast.essence_id = 6
-PurifyingBlast.essence_major = true
-PurifyingBlast:AutoAoe(true)
-local ReapingFlames = Ability:Add(310690, false, true) -- 311195
-ReapingFlames.cooldown_duration = 45
-ReapingFlames.essence_id = 35
-ReapingFlames.essence_major = true
-local RippleInSpace = Ability:Add(302731, true, true)
-RippleInSpace.buff_duration = 2
-RippleInSpace.cooldown_duration = 60
-RippleInSpace.essence_id = 15
-RippleInSpace.essence_major = true
-local TheUnboundForce = Ability:Add(298452, false, true)
-TheUnboundForce.cooldown_duration = 45
-TheUnboundForce.essence_id = 28
-TheUnboundForce.essence_major = true
-local VisionOfPerfection = Ability:Add(299370, true, true, 303345)
-VisionOfPerfection.buff_duration = 10
-VisionOfPerfection.essence_id = 22
-VisionOfPerfection.essence_major = true
-local WorldveinResonance = Ability:Add(295186, true, true)
-WorldveinResonance.cooldown_duration = 60
-WorldveinResonance.essence_id = 4
-WorldveinResonance.essence_major = true
----- Minor Essences
-local AncientFlame = Ability:Add(295367, false, true)
-AncientFlame.buff_duration = 10
-AncientFlame.essence_id = 12
-local CondensedLifeForce = Ability:Add(295367, false, true)
-CondensedLifeForce.essence_id = 14
-local FocusedEnergy = Ability:Add(295248, true, true)
-FocusedEnergy.buff_duration = 4
-FocusedEnergy.essence_id = 5
-local Lifeblood = Ability:Add(295137, true, true)
-Lifeblood.essence_id = 4
-local LucidDreams = Ability:Add(298343, true, true)
-LucidDreams.buff_duration = 8
-LucidDreams.essence_id = 27
-local PurificationProtocol = Ability:Add(295305, false, true)
-PurificationProtocol.essence_id = 6
-PurificationProtocol:AutoAoe()
-local RealityShift = Ability:Add(302952, true, true)
-RealityShift.buff_duration = 20
-RealityShift.cooldown_duration = 30
-RealityShift.essence_id = 15
-local RecklessForce = Ability:Add(302932, true, true)
-RecklessForce.buff_duration = 3
-RecklessForce.essence_id = 28
-RecklessForce.counter = Ability:Add(302917, true, true)
-RecklessForce.counter.essence_id = 28
-local StriveForPerfection = Ability:Add(299369, true, true)
-StriveForPerfection.essence_id = 22
+-- PvP talents
+
 -- Racials
 
--- Trinket Effects
+-- Covenant abilities
+
+-- Soulbind conduits
+
+-- Legendary effects
+
+-- Trinket effects
 
 -- End Abilities
 
@@ -1200,78 +1085,14 @@ function InventoryItem:Usable(seconds)
 end
 
 -- Inventory Items
-local Healthstone = InventoryItem:Add(5512)
-Healthstone.created_by = CreateHealthstone
-Healthstone.max_charges = 3
-local GreaterFlaskOfEndlessFathoms = InventoryItem:Add(168652)
-GreaterFlaskOfEndlessFathoms.buff = Ability:Add(298837, true, true)
-local PotionOfUnbridledFury = InventoryItem:Add(169299)
-PotionOfUnbridledFury.buff = Ability:Add(300714, true, true)
-PotionOfUnbridledFury.buff.triggers_gcd = false
-local SuperiorBattlePotionOfIntellect = InventoryItem:Add(168498)
-SuperiorBattlePotionOfIntellect.buff = Ability:Add(298152, true, true)
-SuperiorBattlePotionOfIntellect.buff.triggers_gcd = false
+local SpectralFlaskOfPower = InventoryItem:Add(171276)
+SpectralFlaskOfPower.buff = Ability:Add(307185, true, true)
+local PotionOfSpectralIntellect = InventoryItem:Add(171273)
+PotionOfSpectralIntellect.buff = Ability:Add(307162, true, true)
 -- Equipment
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
 -- End Inventory Items
-
--- Start Azerite Trait API
-
-Azerite.equip_slots = { 1, 3, 5 } -- Head, Shoulder, Chest
-
-function Azerite:Init()
-	self.locations = {}
-	self.traits = {}
-	self.essences = {}
-	local i
-	for i = 1, #self.equip_slots do
-		self.locations[i] = ItemLocation:CreateFromEquipmentSlot(self.equip_slots[i])
-	end
-end
-
-function Azerite:Update()
-	local _, loc, slot, pid, pinfo
-	for pid in next, self.traits do
-		self.traits[pid] = nil
-	end
-	for pid in next, self.essences do
-		self.essences[pid] = nil
-	end
-	for _, loc in next, self.locations do
-		if GetInventoryItemID('player', loc:GetEquipmentSlot()) and C_AzeriteEmpoweredItem.IsAzeriteEmpoweredItem(loc) then
-			for _, slot in next, C_AzeriteEmpoweredItem.GetAllTierInfo(loc) do
-				if slot.azeritePowerIDs then
-					for _, pid in next, slot.azeritePowerIDs do
-						if C_AzeriteEmpoweredItem.IsPowerSelected(loc, pid) then
-							self.traits[pid] = 1 + (self.traits[pid] or 0)
-							pinfo = C_AzeriteEmpoweredItem.GetPowerInfo(pid)
-							if pinfo and pinfo.spellID then
-								--print('Azerite found:', pinfo.azeritePowerID, GetSpellInfo(pinfo.spellID))
-								self.traits[pinfo.spellID] = self.traits[pid]
-							end
-						end
-					end
-				end
-			end
-		end
-	end
-	for _, loc in next, C_AzeriteEssence.GetMilestones() or {} do
-		if loc.slot then
-			pid = C_AzeriteEssence.GetMilestoneEssence(loc.ID)
-			if pid then
-				pinfo = C_AzeriteEssence.GetEssenceInfo(pid)
-				self.essences[pid] = {
-					id = pid,
-					rank = pinfo.rank,
-					major = loc.slot == 0,
-				}
-			end
-		end
-	end
-end
-
--- End Azerite Trait API
 
 -- Start Player API
 
@@ -1325,7 +1146,9 @@ function Player:BloodlustActive()
 	local _, i, id
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
-		if (
+		if not id then
+			return false
+		elseif (
 			id == 2825 or   -- Bloodlust (Horde Shaman)
 			id == 32182 or  -- Heroism (Alliance Shaman)
 			id == 80353 or  -- Time Warp (Mage)
@@ -1355,14 +1178,19 @@ function Player:Equipped(itemID, slot)
 	return false
 end
 
-function Player:Equipped(itemID, slot)
-	if slot then
-		return GetInventoryItemID('player', slot) == itemID, slot
-	end
-	local i
+function Player:BonusIdEquipped(bonusId)
+	local i, id, link, item
 	for i = 1, 19 do
-		if GetInventoryItemID('player', i) == itemID then
-			return true, i
+		link = GetInventoryItemLink('player', i)
+		if link then
+			item = link:match('Hitem:%d+:([%d:]+)')
+			if item then
+				for id in item:gmatch('(%d+)') do
+					if tonumber(id) == bonusId then
+						return true
+					end
+				end
+			end
 		end
 	end
 	return false
@@ -1374,29 +1202,38 @@ end
 
 function Player:UpdatePet()
 	self.pet = UnitGUID('pet')
-	self.pet_alive = (self.pet and not UnitIsDead('pet') or SummonWaterElemental:Previous()) and true
+	self.pet_alive = (self.pet and not UnitIsDead('pet') or (self.ability_casting and self.ability_casting.pet_family)) and true
 	self.pet_active = (self.pet_alive and not self.pet_stuck or IsFlying()) and true
 end
 
 function Player:UpdateAbilities()
 	Player.mana_base = BaseMana[UnitLevel('player')]
+	Player.arcane_charges_max = UnitPowerMax('player', 16)
 
-	local _, ability, pet
+	local _, ability, spellId, node
 
 	for _, ability in next, abilities.all do
-		ability.name, _, ability.icon = GetSpellInfo(ability.spellId)
 		ability.known = false
-		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.spellId2 and C_LevelLink.IsSpellLocked(ability.spellId2)) then
-			-- spell is locked, do not mark as known
-		elseif IsPlayerSpell(ability.spellId) or (ability.spellId2 and IsPlayerSpell(ability.spellId2)) then
-			ability.known = true
-		elseif Azerite.traits[ability.spellId] then
-			ability.known = true
-		elseif ability.essence_id and Azerite.essences[ability.essence_id] then
-			if ability.essence_major then
-				ability.known = Azerite.essences[ability.essence_id].major
-			else
+		for _, spellId in next, ability.spellIds do
+			ability.spellId, ability.name, _, ability.icon = spellId, GetSpellInfo(spellId)
+			if IsPlayerSpell(spellId) then
 				ability.known = true
+				break
+			end
+		end
+		if C_LevelLink.IsSpellLocked(ability.spellId) then
+			ability.known = false -- spell is locked, do not mark as known
+		end
+		if ability.bonus_id then -- used for checking Legendary crafted effects
+			ability.known = self:BonusIdEquipped(ability.bonus_id)
+		end
+		if ability.conduit_id then
+			node = C_Soulbinds.FindNodeIDActuallyInstalled(C_Soulbinds.GetActiveSoulbindID(), ability.conduit_id)
+			if node then
+				node = C_Soulbinds.GetNode(node)
+				if node and node.state == 3 then
+					ability.known = true
+				end
 			end
 		end
 	end
@@ -1405,9 +1242,6 @@ function Player:UpdateAbilities()
 	Waterbolt.known = SummonWaterElemental.known
 	WintersChill.known = BrainFreeze.known
 	HeatingUp.known = HotStreak.known
-	if FlameOn.known then
-		FireBlast.cooldown_duration = 10
-	end
 
 	abilities.bySpellId = {}
 	abilities.velocity = {}
@@ -1440,11 +1274,11 @@ function Target:UpdateHealth()
 	timer.health = 0
 	self.health = UnitHealth('target')
 	self.health_max = UnitHealthMax('target')
-	table.remove(self.healthArray, 1)
-	self.healthArray[25] = self.health
-	self.timeToDieMax = self.health / Player.health_max * 15
+	table.remove(self.health_array, 1)
+	self.health_array[25] = self.health
+	self.timeToDieMax = self.health / Player.health_max * 40
 	self.healthPercentage = self.health_max > 0 and (self.health / self.health_max * 100) or 100
-	self.healthLostPerSec = (self.healthArray[1] - self.health) / 5
+	self.healthLostPerSec = (self.health_array[1] - self.health) / 5
 	self.timeToDie = self.healthLostPerSec > 0 and min(self.timeToDieMax, self.health / self.healthLostPerSec) or self.timeToDieMax
 end
 
@@ -1464,7 +1298,7 @@ function Target:Update()
 		self.hostile = true
 		local i
 		for i = 1, 25 do
-			self.healthArray[i] = 0
+			self.health_array[i] = 0
 		end
 		self:UpdateHealth()
 		if Opt.always_on then
@@ -1481,7 +1315,7 @@ function Target:Update()
 		self.guid = guid
 		local i
 		for i = 1, 25 do
-			self.healthArray[i] = UnitHealth('target')
+			self.health_array[i] = UnitHealth('target')
 		end
 	end
 	self.boss = false
@@ -1653,15 +1487,12 @@ function Firestarter:Remains()
 end
 
 function SearingTouch:Remains()
-	return SearingTouch.known and Target.healthPercentage < 30 and 600
+	return SearingTouch.known and Target.healthPercentage < 30 and 600 or 0
 end
 
 function HeatingUp:Remains()
 	if Scorch:Casting() and SearingTouch:Up() then
-		if Ability.Up(self) then
-			return 0
-		end
-		if Ability.Up(HotStreak) then
+		if Ability.Remains(self) > 0 or Ability.Remains(HotStreak) > 0 then
 			return 0
 		end
 		return self:Duration()
@@ -1670,7 +1501,7 @@ function HeatingUp:Remains()
 end
 
 function HotStreak:Remains()
-	if Scorch:Casting() and SearingTouch:Up() and Ability.Up(HeatingUp) then
+	if Scorch:Casting() and SearingTouch:Up() and Ability.Remains(HeatingUp) > 0 then
 		return self:Duration()
 	end
 	return Ability.Remains(self)
@@ -1727,8 +1558,8 @@ actions.precombat+=/arcane_blast
 			UseCooldown(MirrorImage)
 		end
 		if not Player:InArenaOrBattleground() then
-			if Opt.pot and SuperiorBattlePotionOfIntellect:Usable() then
-				UseCooldown(SuperiorBattlePotionOfIntellect)
+			if Opt.pot and PotionOfSpectralIntellect:Usable() then
+				UseCooldown(PotionOfSpectralIntellect)
 			end
 		end
 		if ArcaneBlast:Usable() and not ArcaneBlast:Casting() then
@@ -1852,8 +1683,8 @@ actions.burn+=/arcane_barrage
 	if PresenceOfMind:Usable() and ((RuneOfPower:Up() and RuneOfPower:Remains() <= (2 * ArcaneBlast:CastTime())) or (ArcanePower:Up() and ArcanePower:Remains() <= (2 * ArcaneBlast:CastTime()))) then
 		UseCooldown(PresenceOfMind)
 	end
-	if Opt.pot and SuperiorBattlePotionOfIntellect:Usable() and ArcanePower:Up() then
-		UseExtra(SuperiorBattlePotionOfIntellect)
+	if Opt.pot and PotionOfSpectralIntellect:Usable() and ArcanePower:Up() then
+		UseExtra(PotionOfSpectralIntellect)
 	end
 	if ArcaneOrb:Usable() and (Player:ArcaneCharges() == 0 or Player.enemies < (Resonance.known and 2 or 3)) then
 		UseCooldown(ArcaneOrb)
@@ -2001,8 +1832,8 @@ actions.precombat+=/pyroblast
 			UseCooldown(MirrorImage)
 		end
 		if not Player:InArenaOrBattleground() then
-			if Opt.pot and SuperiorBattlePotionOfIntellect:Usable() then
-				UseCooldown(SuperiorBattlePotionOfIntellect)
+			if Opt.pot and PotionOfSpectralIntellect:Usable() then
+				UseCooldown(PotionOfSpectralIntellect)
 			end
 		end
 		if Pyroblast:Usable() and not (Pyroblast:Casting() or Fireball:Casting()) then
@@ -2017,13 +1848,6 @@ actions.precombat+=/pyroblast
 actions=counterspell
 actions+=/call_action_list,name=items_high_priority
 actions+=/mirror_image,if=buff.combustion.down
-actions+=/guardian_of_azeroth,if=cooldown.combustion.remains<10|target.time_to_die<cooldown.combustion.remains
-actions+=/concentrated_flame
-actions+=/focused_azerite_beam
-actions+=/purifying_blast
-actions+=/ripple_in_space
-actions+=/the_unbound_force
-actions+=/worldvein_resonance
 actions+=/rune_of_power,if=talent.firestarter.enabled&firestarter.remains>full_recharge_time|cooldown.combustion.remains>variable.combustion_rop_cutoff&buff.combustion.down|target.time_to_die<cooldown.combustion.remains&buff.combustion.down
 actions+=/call_action_list,name=combustion_phase,if=(talent.rune_of_power.enabled&cooldown.combustion.remains<=action.rune_of_power.cast_time|cooldown.combustion.ready)&!firestarter.active|buff.combustion.up
 actions+=/fire_blast,use_while_casting=1,use_off_gcd=1,if=(essence.memory_of_lucid_dreams.major|essence.memory_of_lucid_dreams.minor&azerite.blaster_master.enabled)&charges=max_charges&!buff.hot_streak.react&!(buff.heating_up.react&(buff.combustion.up&(action.fireball.in_flight|action.pyroblast.in_flight|action.scorch.executing)|target.health.pct<=30&action.scorch.executing))&!(!buff.heating_up.react&!buff.hot_streak.react&buff.combustion.down&(action.fireball.in_flight|action.pyroblast.in_flight))
@@ -2035,31 +1859,13 @@ actions+=/call_action_list,name=standard_rotation
 	if MirrorImage:Usable() and Combustion:Down() then
 		UseCooldown(MirrorImage)
 	end
-	if GuardianOfAzeroth:Usable() and (Combustion:Cooldown() < 10 or Target.timeToDie < Combustion:Cooldown()) then
-		UseCooldown(GuardianOfAzeroth)
-	elseif ConcentratedFlame:Usable() and ConcentratedFlame.dot:Down() and not ConcentratedFlame:Previous() then
-		UseCooldown(ConcentratedFlame)
-	elseif FocusedAzeriteBeam:Usable() and not Player.moving then
-		UseCooldown(FocusedAzeriteBeam)
-	elseif PurifyingBlast:Usable() then
-		UseCooldown(PurifyingBlast)
-	elseif RippleInSpace:Usable() then
-		UseCooldown(RippleInSpace)
-	elseif TheUnboundForce:Usable() then
-		UseCooldown(TheUnboundForce)
-	elseif WorldveinResonance:Usable() and Lifeblood:Stack() < 3 then
-		UseCooldown(WorldveinResonance)
-	end
 	if RuneOfPower:Usable() and ((Firestarter.known and Firestarter:Remains() > RuneOfPower:FullRechargeTime()) or (Combustion:Down() and (Combustion:Cooldown() > Player.combustion_rop_cutoff or Target.timeToDie < Combustion:Cooldown()))) then
 		UseCooldown(RuneOfPower)
 	end
 	local apl
-	if (RuneOfPower.known and Combustion:Cooldown() < RuneOfPower:CastTime() or Combustion:Ready()) and Firestarter:Down() or Combustion:Up() then
+	if Combustion.known and ((RuneOfPower.known and Combustion:Cooldown() < RuneOfPower:CastTime() or Combustion:Ready()) and Firestarter:Down() or Combustion:Up()) then
 		apl = self:combustion_phase()
 		if apl then return apl end
-	end
-	if FireBlast:Usable() and (MemoryOfLucidDreams.known or LucidDreams.known and BlasterMaster.known) and FireBlast:Charges() == FireBlast:MaxCharges() and HotStreak:Down() and (HeatingUp:Up() and (Combustion:Up() and (Fireball:Traveling() or Pyroblast:Traveling() or Scorch:Casting()) or Target.healthPct <= 30 and Scorch:Casting())) and not (HeatingUp:Down() and HotStreak:Down() and Combustion:Down() and (Fireball:Traveling() or Pyroblast:Traveling())) then
-		UseExtra(FireBlast)
 	end
 	if RuneOfPower.known and RuneOfPower:Up() and Combustion:Down() then
 		apl = self:rop_phase()
@@ -2117,31 +1923,16 @@ actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active
 actions.combustion_phase+=/dragons_breath,if=buff.combustion.remains<gcd.max&buff.combustion.up
 actions.combustion_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.enabled
 ]]
-	if MemoryOfLucidDreams:Usable() then
-		UseCooldown(MemoryOfLucidDreams)
-	end
-	if FireBlast:Usable() and Combustion:Up() and ((FireBlast:ChargesFractional() + (Combustion:Remains() - BlasterMaster:Duration()) / FireBlast:CooldownDuration() - (Combustion:Remains() / (BlasterMaster:Duration() - 0.5)) >= 0) or not BlasterMaster.known or not FlameOn.known or Combustion:Remains() <= BlasterMaster:Duration() or BlasterMaster:Remains() < 0.5) and ((not Scorch:Casting() and not Pyroblast:Traveling() and HeatingUp:Up()) or (Scorch:Casting() and HotStreak:Down() and (HeatingUp:Down() or BlasterMaster.known and FlameOn.known and Pyroblast:Traveling() and HeatingUp:Down() and HotStreak:Down()))) then
-		UseExtra(FireBlast)
-	end 
 	if RuneOfPower:Usable() and Combustion:Down() then
 		UseCooldown(RuneOfPower)
-	end
-	if FireBlast:Usable() and BlasterMaster.known and FlameOn.known and BlasterMaster:Down() then
-		if RuneOfPower.known then
-			if RuneOfPower:Casting() and Player.execute_remains < 0.6 then
-				UseExtra(FireBlast)
-			end
-		elseif (Combustion:Ready() or Combustion:Up()) and not (Pyroblast:Traveling() or Fireball:Traveling()) then
-			UseExtra(FireBlast)
-		end
 	end
 	local apl = self:active_talents()
 	if apl then return apl end
 	if Combustion:Usable() and (not Meteor.known or Meteor:Cooldown() > 43) and (not RuneOfPower.known or RuneOfPower:Up()) then
 		UseCooldown(Combustion)
 	end
-	if Opt.pot and Target.boss and SuperiorBattlePotionOfIntellect:Usable() then
-		UseCooldown(SuperiorBattlePotionOfIntellect)
+	if Opt.pot and Target.boss and PotionOfSpectralIntellect:Usable() then
+		UseCooldown(PotionOfSpectralIntellect)
 	end
 	if Opt.trinket then
 		if Trinket1:Usable() then
@@ -2150,7 +1941,7 @@ actions.combustion_phase+=/scorch,if=target.health.pct<=30&talent.searing_touch.
 			UseCooldown(Trinket2)
 		end
 	end
-	if Flamestrike:Usable() and not BlasterMaster.known and HotStreak:Up() and Player.enemies > (FlamePatch.known and 2 or 6) then
+	if Flamestrike:Usable() and HotStreak:Up() and Player.enemies > (FlamePatch.known and 2 or 6) then
 		return Flamestrike
 	end
 	if Pyroblast:Usable() then
@@ -2288,8 +2079,8 @@ actions.standard_rotation+=/scorch
 	end
 	if FireBlast:Usable() then
 		Player.fire_blast_pooling = (RuneOfPower.known and RuneOfPower:Cooldown() < FireBlast:FullRechargeTime() and (Combustion:Cooldown() > Player.combustion_rop_cutoff or Firestarter:Up()) and (RuneOfPower:Cooldown() < Target.timeToDie or RuneOfPower:Charges() > 0)) or
-			(Combustion:Cooldown() < (FireBlast:FullRechargeTime() + (BlasterMaster.known and FireBlast:CooldownDuration() or 0)) and Firestarter:Down() and Combustion:Cooldown() < Target.timeToDie) or
-			(Firestarter.known and Firestarter:Up() and Firestarter:Remains() < (FireBlast:FullRechargeTime() + (BlasterMaster.known and FireBlast:CooldownDuration() or 0)))
+			(Combustion:Cooldown() < FireBlast:FullRechargeTime() and Firestarter:Down() and Combustion:Cooldown() < Target.timeToDie) or
+			(Firestarter.known and Firestarter:Up() and Firestarter:Remains() < FireBlast:FullRechargeTime())
 		if Target.timeToDie < 4 then
 			UseExtra(FireBlast)
 		elseif Kindling.known then
@@ -2311,7 +2102,7 @@ actions.standard_rotation+=/scorch
 	if Player.moving and Pyroblast:Usable() and HotStreak:Up() then
 		return Pyroblast
 	end
-	if Scorch:Usable() and (Player.moving or SearingTouch:Up() or (Preheat.known and Preheat:Down())) then
+	if Scorch:Usable() and (Player.moving or SearingTouch:Up()) then
 		return Scorch
 	end
 	if Fireball:Usable() then
@@ -2342,8 +2133,8 @@ actions.precombat+=/frostbolt
 			UseCooldown(MirrorImage)
 		end
 		if not Player:InArenaOrBattleground() then
-			if Opt.pot and SuperiorBattlePotionOfIntellect:Usable() then
-				UseCooldown(SuperiorBattlePotionOfIntellect)
+			if Opt.pot and PotionOfSpectralIntellect:Usable() then
+				UseCooldown(PotionOfSpectralIntellect)
 			end
 		end
 		if Frostbolt:Usable() and not Frostbolt:Casting() then
@@ -2422,8 +2213,8 @@ actions.talent_rop+=/rune_of_power,if=!talent.glacial_spike.enabled&(talent.ebon
 			end
 		end
 	end
-	if Opt.pot and SuperiorBattlePotionOfIntellect:Usable() and (IcyVeins:Previous() or Target.timeToDie < 70) then
-		return UseCooldown(SuperiorBattlePotionOfIntellect)
+	if Opt.pot and PotionOfSpectralIntellect:Usable() and (IcyVeins:Previous() or Target.timeToDie < 70) then
+		return UseCooldown(PotionOfSpectralIntellect)
 	end
 	if Opt.trinket then
 		if Trinket1:Usable() then
@@ -2530,9 +2321,6 @@ actions.single+=/ice_lance
 	end
 	if Flurry:Usable() then
 		if Player.enemies == 1 and Target.timeToDie < 2 and BrainFreeze:Up() then
-			return Flurry
-		end
-		if WintersReach.known and BrainFreeze:Down() and WintersReach:Up() then
 			return Flurry
 		end
 	end
@@ -2787,30 +2575,30 @@ end
 UI.anchor_points = {
 	['blizzard'] = {
 		[SPEC.ARCANE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		},
 		[SPEC.FIRE] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		},
 		[SPEC.FROST] = {
-			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['above'] = { 'BOTTOM', 'TOP', 0, 49 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -12 }
 		}
 	},
 	['kui'] = {
 		[SPEC.ARCANE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 4 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		},
 		[SPEC.FIRE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 4 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		},
 		[SPEC.FROST] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 28 },
-			['below'] = { 'TOP', 'BOTTOM', 0, 4 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -2 }
 		}
 	},
 }
@@ -2822,7 +2610,7 @@ function UI.OnResourceFrameHide()
 end
 
 function UI.OnResourceFrameShow()
-	if Opt.snap then
+	if Opt.snap and UI.anchor.points then
 		local p = UI.anchor.points[Player.spec][Opt.snap]
 		amagicPanel:ClearAllPoints()
 		amagicPanel:SetPoint(p[1], UI.anchor.frame, p[2], p[3], p[4])
@@ -2838,7 +2626,7 @@ function UI:HookResourceFrame()
 		self.anchor.frame = KuiNameplatesPlayerAnchor
 	else
 		self.anchor.points = self.anchor_points.blizzard
-		self.anchor.frame = NamePlateDriverFrame:GetClassNameplateManaBar()
+		self.anchor.frame = NamePlateDriverFrame:GetClassNameplateBar()
 	end
 	if self.anchor.frame then
 		self.anchor.frame:HookScript('OnHide', self.OnResourceFrameHide)
@@ -2885,7 +2673,7 @@ end
 
 function UI:UpdateCombat()
 	timer.combat = 0
-	local _, start, duration, remains, spellId
+	local _, start, duration, remains, spellId, speed, max_speed
 	Player.ctime = GetTime()
 	Player.time = Player.ctime - Player.time_diff
 	Player.main =  nil
@@ -2911,7 +2699,9 @@ function UI:UpdateCombat()
 	if Player.spec == SPEC.ARCANE then
 		Player.arcane_charges = UnitPower('player', 16)
 	end
-	Player.moving = GetUnitSpeed('player') ~= 0
+	speed, max_speed = GetUnitSpeed('player')
+	Player.moving = speed ~= 0
+	Player.movement_speed = max_speed / 7 * 100
 	Player:UpdatePet()
 
 	trackAuras:Purge()
@@ -2970,17 +2760,16 @@ end
 -- Start Event Handling
 
 function events:ADDON_LOADED(name)
-	if name == 'Automagically' then
+	if name == ADDON then
 		Opt = Automagically
 		if not Opt.frequency then
-			print('It looks like this is your first time running ' .. name .. ', why don\'t you take some time to familiarize yourself with the commands?')
+			print('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
 			print('Type |cFFFFD000' .. SLASH_Automagically1 .. '|r for a list of commands.')
 		end
 		if UnitLevel('player') < 10 then
-			print('[|cFFFFD000Warning|r] ' .. name .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
+			print('[|cFFFFD000Warning|r] ' .. ADDON .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 		InitOpts()
-		Azerite:Init()
 		UI:UpdateDraggable()
 		UI:UpdateAlpha()
 		UI:UpdateScale()
@@ -3016,7 +2805,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			Player.last_swing_taken = Player.time
 		end
 		if Opt.auto_aoe then
-			if (dstGUID == Player.guid or dstGUID == Player.pet) then
+			if dstGUID == Player.guid or dstGUID == Player.pet then
 				autoAoe:Add(srcGUID, true)
 			elseif (srcGUID == Player.guid or srcGUID == Player.pet) and not (missType == 'EVADE' or missType == 'IMMUNE') then
 				autoAoe:Add(dstGUID, true)
@@ -3025,6 +2814,10 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 
 	local ability = spellId and abilities.bySpellId[spellId]
+
+	if APL[Player.spec].combat_event then
+		APL[Player.spec]:combat_event(eventType, srcGUID, dstGUID, spellId, ability)
+	end
 
 	if (srcGUID ~= Player.guid and srcGUID ~= Player.pet) then
 		return
@@ -3039,11 +2832,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	end
 
 	if not ability then
---[[
-		if spellId and type(spellName) == 'string' then
-			print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, spellName, spellId))
-		end
-]]
+		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 		return
 	end
 
@@ -3051,8 +2840,8 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	   eventType == 'SPELL_CAST_START' or
 	   eventType == 'SPELL_CAST_SUCCESS' or
 	   eventType == 'SPELL_CAST_FAILED' or
-	   eventType == 'SPELL_AURA_REMOVED' or
 	   eventType == 'SPELL_DAMAGE' or
+	   eventType == 'SPELL_ABSORBED' or
 	   eventType == 'SPELL_PERIODIC_DAMAGE' or
 	   eventType == 'SPELL_MISSED' or
 	   eventType == 'SPELL_AURA_APPLIED' or
@@ -3079,7 +2868,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			end
 			if Opt.previous and amagicPanel:IsVisible() then
 				amagicPreviousPanel.ability = ability
-				amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\border.blp')
+				amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 				amagicPreviousPanel.icon:SetTexture(ability.icon)
 				amagicPreviousPanel:Show()
 			end
@@ -3121,7 +2910,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			ability:RecordTargetHit(dstGUID)
 		end
 	end
-	if eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
+	if eventType == 'SPELL_ABSORBED' or eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
 		if ability.travel_start and ability.travel_start[dstGUID] then
 			ability.travel_start[dstGUID] = nil
 		end
@@ -3130,7 +2919,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			ability.range_est_start = nil
 		end
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and amagicPanel:IsVisible() and ability == amagicPreviousPanel.ability then
-			amagicPreviousPanel.border:SetTexture('Interface\\AddOns\\Automagically\\misseffect.blp')
+			amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'misseffect.blp')
 		end
 		if Player.spec == SPEC.FROST and dstGUID == Target.guid then
 			if eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
@@ -3229,7 +3018,6 @@ function events:PLAYER_EQUIPMENT_CHANGED()
 			inventoryItems[i].can_use = false
 		end
 	end
-	Azerite:Update()
 	Player:UpdateAbilities()
 end
 
@@ -3281,8 +3069,15 @@ function events:PLAYER_PVP_TALENT_UPDATE()
 	Player:UpdateAbilities()
 end
 
-function events:AZERITE_ESSENCE_UPDATE()
-	Azerite:Update()
+function events:SOULBIND_ACTIVATED()
+	Player:UpdateAbilities()
+end
+
+function events:SOULBIND_NODE_UPDATED()
+	Player:UpdateAbilities()
+end
+
+function events:SOULBIND_PATH_CHANGED()
 	Player:UpdateAbilities()
 end
 
@@ -3361,10 +3156,10 @@ local function Status(desc, opt, ...)
 	else
 		opt_view = opt and '|cFF00C000On|r' or '|cFFC00000Off|r'
 	end
-	print('Automagically -', desc .. ':', opt_view, ...)
+	print(ADDON, '-', desc .. ':', opt_view, ...)
 end
 
-function SlashCmdList.Automagically(msg, editbox)
+SlashCmdList[ADDON] = function(msg, editbox)
 	msg = { strsplit(' ', msg:lower()) }
 	if startsWith(msg[1], 'lock') then
 		if msg[2] then
@@ -3430,7 +3225,7 @@ function SlashCmdList.Automagically(msg, editbox)
 			end
 			return Status('Action button glow scale', Opt.scale.glow, 'times')
 		end
-		return Status('Default icon scale options', '|cFFFFD000prev 0.7|r, |cFFFFD000main 1|r, |cFFFFD000cd 0.7|r, |cFFFFD000interrupt 0.4|r, |cFFFFD000pet 0.4|r, and |cFFFFD000glow 1|r')
+		return Status('Default icon scale options', '|cFFFFD000prev 0.7|r, |cFFFFD000main 1|r, |cFFFFD000cd 0.7|r, |cFFFFD000interrupt 0.4|r, |cFFFFD000extra 0.4|r, and |cFFFFD000glow 1|r')
 	end
 	if msg[1] == 'alpha' then
 		if msg[2] then
@@ -3490,7 +3285,7 @@ function SlashCmdList.Automagically(msg, editbox)
 			end
 			return Status('Glow color', '|cFFFF0000' .. Opt.glow.color.r, '|cFF00FF00' .. Opt.glow.color.g, '|cFF0000FF' .. Opt.glow.color.b)
 		end
-		return Status('Possible glow options', '|cFFFFD000main|r, |cFFFFD000cd|r, |cFFFFD000interrupt|r, |cFFFFD000pet|r, |cFFFFD000blizzard|r, and |cFFFFD000color')
+		return Status('Possible glow options', '|cFFFFD000main|r, |cFFFFD000cd|r, |cFFFFD000interrupt|r, |cFFFFD000extra|r, |cFFFFD000blizzard|r, and |cFFFFD000color')
 	end
 	if startsWith(msg[1], 'prev') then
 		if msg[2] then
@@ -3504,13 +3299,13 @@ function SlashCmdList.Automagically(msg, editbox)
 			Opt.always_on = msg[2] == 'on'
 			Target:Update()
 		end
-		return Status('Show the Automagically UI without a target', Opt.always_on)
+		return Status('Show the ' .. ADDON .. ' UI without a target', Opt.always_on)
 	end
 	if msg[1] == 'cd' then
 		if msg[2] then
 			Opt.cooldown = msg[2] == 'on'
 		end
-		return Status('Use Automagically for cooldown management', Opt.cooldown)
+		return Status('Use ' .. ADDON .. ' for cooldown management', Opt.cooldown)
 	end
 	if msg[1] == 'swipe' then
 		if msg[2] then
@@ -3582,6 +3377,12 @@ function SlashCmdList.Automagically(msg, editbox)
 		end
 		return Status('Length of time target exists in auto AoE after being hit', Opt.auto_aoe_ttl, 'seconds')
 	end
+	if msg[1] == 'ttd' then
+		if msg[2] then
+			Opt.cd_ttd = tonumber(msg[2]) or 10
+		end
+		return Status('Minimum enemy lifetime to use cooldowns on (ignored on bosses)', Opt.cd_ttd, 'seconds')
+	end
 	if startsWith(msg[1], 'pot') then
 		if msg[2] then
 			Opt.pot = msg[2] == 'on'
@@ -3606,32 +3407,33 @@ function SlashCmdList.Automagically(msg, editbox)
 		UI:SnapAllPanels()
 		return Status('Position has been reset to', 'default')
 	end
-	print('Automagically (version: |cFFFFD000' .. GetAddOnMetadata('Automagically', 'Version') .. '|r) - Commands:')
+	print(ADDON, '(version: |cFFFFD000' .. GetAddOnMetadata(ADDON, 'Version') .. '|r) - Commands:')
 	local _, cmd
 	for _, cmd in next, {
-		'locked |cFF00C000on|r/|cFFC00000off|r - lock the Automagically UI so that it can\'t be moved',
-		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the Automagically UI to the Personal Resource Display',
-		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000glow|r - adjust the scale of the Automagically UI icons',
-		'alpha |cFFFFD000[percent]|r - adjust the transparency of the Automagically UI icons',
+		'locked |cFF00C000on|r/|cFFC00000off|r - lock the ' .. ADDON .. ' UI so that it can\'t be moved',
+		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the ' .. ADDON .. ' UI to the Personal Resource Display',
+		'scale |cFFFFD000prev|r/|cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000extra|r/|cFFFFD000glow|r - adjust the scale of the ' .. ADDON .. ' UI icons',
+		'alpha |cFFFFD000[percent]|r - adjust the transparency of the ' .. ADDON .. ' UI icons',
 		'frequency |cFFFFD000[number]|r - set the calculation frequency (default is every 0.2 seconds)',
 		'glow |cFFFFD000main|r/|cFFFFD000cd|r/|cFFFFD000interrupt|r/|cFFFFD000pet|r/|cFFFFD000blizzard|r |cFF00C000on|r/|cFFC00000off|r - glowing ability buttons on action bars',
 		'glow color |cFFF000000.0-1.0|r |cFF00FF000.1-1.0|r |cFF0000FF0.0-1.0|r - adjust the color of the ability button glow',
 		'previous |cFF00C000on|r/|cFFC00000off|r - previous ability icon',
-		'always |cFF00C000on|r/|cFFC00000off|r - show the Automagically UI without a target',
-		'cd |cFF00C000on|r/|cFFC00000off|r - use Automagically for cooldown management',
+		'always |cFF00C000on|r/|cFFC00000off|r - show the ' .. ADDON .. ' UI without a target',
+		'cd |cFF00C000on|r/|cFFC00000off|r - use ' .. ADDON .. ' for cooldown management',
 		'swipe |cFF00C000on|r/|cFFC00000off|r - show spell casting swipe animation on main ability icon',
 		'dim |cFF00C000on|r/|cFFC00000off|r - dim main ability icon when you don\'t have enough resources to use it',
 		'miss |cFF00C000on|r/|cFFC00000off|r - red border around previous ability when it fails to hit',
 		'aoe |cFF00C000on|r/|cFFC00000off|r - allow clicking main ability icon to toggle amount of targets (disables moving)',
 		'bossonly |cFF00C000on|r/|cFFC00000off|r - only use cooldowns on bosses',
-		'hidespec |cFFFFD000arcane|r/|cFFFFD000fire|r/|cFFFFD000frost|r - toggle disabling Automagically for specializations',
+		'hidespec |cFFFFD000arcane|r/|cFFFFD000fire|r/|cFFFFD000frost|r - toggle disabling ' .. ADDON .. ' for specializations',
 		'interrupt |cFF00C000on|r/|cFFC00000off|r - show an icon for interruptable spells',
 		'auto |cFF00C000on|r/|cFFC00000off|r  - automatically change target mode on AoE spells',
 		'ttl |cFFFFD000[seconds]|r  - time target exists in auto AoE after being hit (default is 10 seconds)',
+		'ttd |cFFFFD000[seconds]|r  - minimum enemy lifetime to use cooldowns on (default is 8 seconds, ignored on bosses)',
 		'pot |cFF00C000on|r/|cFFC00000off|r - show flasks and battle potions in cooldown UI',
 		'trinket |cFF00C000on|r/|cFFC00000off|r - show on-use trinkets in cooldown UI',
 		'conserve |cFFFFD000[20-80]|r  - mana conservation threshold (arcane, default is 60%)',
-		'|cFFFFD000reset|r - reset the location of the Automagically UI to default',
+		'|cFFFFD000reset|r - reset the location of the ' .. ADDON .. ' UI to default',
 	} do
 		print('  ' .. SLASH_Automagically1 .. ' ' .. cmd)
 	end
