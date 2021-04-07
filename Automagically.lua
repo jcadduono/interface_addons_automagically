@@ -1044,7 +1044,8 @@ GroveInvigoration.buff_duration = 30
 -- Soulbind conduits
 
 -- Legendary effects
-local FreezingWinds = Ability:Add(327364, true, true)
+local FreezingWinds = Ability:Add(327364, true, true, 327478)
+FreezingWinds.buff_duration = 12
 FreezingWinds.bonus_id = 6829
 local GlacialFragments = Ability:Add(327492, false, true, 327498)
 GlacialFragments.bonus_id = 6830
@@ -1498,12 +1499,6 @@ function FrostNova:Usable()
 	return Ability.Usable(self)
 end
 
-function FrozenOrb:InFlight()
-	if (Player.time - self.last_used) < 10 then
-		return true
-	end
-end
-
 function TimeWarp:Usable()
 	local _, i, id
 	for i = 1, 40 do
@@ -1531,6 +1526,18 @@ function BrainFreeze:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function FrozenOrb:Remains()
+	return max((self.last_used or 0) + self.buff_duration - Player.time - Player.execute_remains, 0)
+end
+
+function FreezingWinds:Remains()
+	local remains = Ability.Remains(self)
+	if remains > 0 then
+		return FrozenOrb:Remains()
+	end
+	return 0
 end
 
 function GlacialSpike:Remains()
@@ -1590,7 +1597,7 @@ function RuneOfPower:Remains()
 	if self:Casting() then
 		return self:Duration()
 	end
-	return max((self.last_used or 0) + self.buff_duration - Player.time - Player.execute_remains, 0)
+	return max((self.summon_time or 0) + self.buff_duration - Player.time - Player.execute_remains, 0)
 end
 
 function Firestarter:Remains()
@@ -2362,13 +2369,13 @@ actions.st+=/ice_lance,if=buff.fingers_of_frost.react|debuff.frozen.remains>trav
 actions.st+=/ebonbolt
 actions.st+=/radiant_spark,if=(!talent.glacial_spike|!conduit.ire_of_the_ascended)&(!runeforge.freezing_winds|active_enemies>=2)&buff.brain_freeze.react
 actions.st+=/mirrors_of_torment
-actions.st+=/shifting_power,if=buff.rune_of_power.down&(soulbind.grove_invigoration|soulbind.field_of_blossoms|runeforge.freezing_winds&buff.freezing_winds.down|active_enemies>=2)
+actions.st+=/shifting_power,if=buff.rune_of_power.down&(!runeforge.freezing_winds|buff.freezing_winds.down)&(soulbind.grove_invigoration|soulbind.field_of_blossoms|runeforge.freezing_winds|active_enemies>=2)
 actions.st+=/arcane_explosion,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_arcane.down
 actions.st+=/fire_blast,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_fire.down
 actions.st+=/glacial_spike,if=buff.brain_freeze.react
 actions.st+=/frostbolt
 ]]
-	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous()))) then
+	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FreezingWinds.known and FreezingWinds:Up() and FingersOfFrost:Down())))) then
 		return Flurry
 	end
 	if FrozenOrb:Usable() then
@@ -2401,7 +2408,7 @@ actions.st+=/frostbolt
 	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
 		return Ebonbolt
 	end
-	if ShiftingPower:Usable() and (not RuneOfPower.known or RuneOfPower:Down()) and (GroveInvigoration.known or FieldOfBlossoms.known or Player.enemies >= 2 or (FreezingWinds.known and not FrozenOrb:InFlight())) then
+	if ShiftingPower:Usable() and (not RuneOfPower.known or RuneOfPower:Down()) and (not FreezingWinds.known or FreezingWinds:Down()) and (GroveInvigoration.known or FieldOfBlossoms.known or FreezingWinds.known or Player.enemies >= 2) then
 		UseCooldown(ShiftingPower)
 	end
 	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
@@ -2429,7 +2436,7 @@ actions.aoe+=/comet_storm
 actions.aoe+=/ice_lance,if=buff.fingers_of_frost.react|debuff.frozen.remains>travel_time|remaining_winters_chill&debuff.winters_chill.remains>travel_time
 actions.aoe+=/radiant_spark,if=soulbind.combat_meditation
 actions.aoe+=/mirrors_of_torment
-actions.aoe+=/shifting_power,if=cooldown.frozen_orb.remains>8
+actions.aoe+=/shifting_power,if=cooldown.frozen_orb.remains>8&(!runeforge.freezing_winds|buff.freezing_winds.down)
 actions.aoe+=/fire_blast,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_fire.down
 actions.aoe+=/arcane_explosion,if=mana.pct>30&active_enemies>=6&!runeforge.glacial_fragments
 actions.aoe+=/ebonbolt
@@ -2464,7 +2471,7 @@ actions.aoe+=/frostbolt
 	if BurstOfCold.known and ConeOfCold:Usable() and BurstOfCold:Up() and (Target:Frozen() or BurstOfCold:Remains() < Player.gcd) then
 		UseCooldown(BurstOfCold)
 	end
-	if ShiftingPower:Usable() and not FrozenOrb:Ready(8) then
+	if ShiftingPower:Usable() and not FrozenOrb:Ready(8) and (not FreezingWinds.known or FreezingWinds:Down()) then
 		UseCooldown(ShiftingPower)
 	end
 	if ArcaneExplosion:Usable() and not GlacialFragments.known and Player.enemies >= 6 and Player:ManaPct() > 30 then
@@ -2862,6 +2869,12 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 			Player.pet_stuck = true
 		end
 	end
+	
+	if eventType == 'SPELL_SUMMON' then
+		if RuneOfPower.known and (ability == RuneOfPower or spellId == 342130) then -- spellId for RoP summoned by any major CD
+			RuneOfPower.summon_time = Player.time
+		end
+	end
 
 	if not ability then
 		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', eventType, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
@@ -2910,9 +2923,6 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 				elseif ability == Evocation then
 					APL[SPEC.ARCANE]:toggle_burn_phase(false)
 				end
-			end
-			if RuneOfPower.known and (ability == IcyVeins or ability == Combustion or ability == ArcanePower) then
-				RuneOfPower.last_used = Player.time
 			end
 			if ability == Blizzard then
 				ability.ground_duration = ability:Duration()
