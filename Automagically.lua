@@ -1034,6 +1034,9 @@ Frostbite.buff_duration = 4
 -- Racials
 
 -- Covenant abilities
+local MirrorsOfTorment = Ability:Add(314793, false, true) -- Venthyr
+MirrorsOfTorment.cooldown_duration = 90
+MirrorsOfTorment.buff_duration = 25
 local ShiftingPower = Ability:Add(314791, false, true, 325130) -- Night Fae
 ShiftingPower.cooldown_duration = 60
 ShiftingPower:AutoAoe()
@@ -1041,8 +1044,12 @@ local FieldOfBlossoms = Ability:Add(319191, true, true, 342774) -- Night Fae, Dr
 FieldOfBlossoms.buff_duration = 12
 local GroveInvigoration = Ability:Add(322721, true, true, 342814) -- Night Fae, Niya, Redirected Anima
 GroveInvigoration.buff_duration = 30
+local WastelandPropriety = Ability:Add(319983, true, true, 333218)
+WastelandPropriety.buff_duration = 10
 -- Soulbind conduits
-
+local SiphonedMalice = Ability:Add(337087, true, true, 337090)
+SiphonedMalice.buff_duration = 10
+SiphonedMalice.conduit_id = 43
 -- Legendary effects
 local FreezingWinds = Ability:Add(327364, true, true, 327478)
 FreezingWinds.buff_duration = 12
@@ -2306,6 +2313,9 @@ actions.cds+=/fireblood
 actions.cds+=/ancestral_call
 actions.cds+=/bag_of_tricks
 ]]
+	if MirrorsOfTorment:Usable() and Player.enemies < 3 and (SiphonedMalice.known or WastelandPropriety.known) then
+		return UseCooldown(MirrorsOfTorment)
+	end
 	if RuneOfPower:Usable() and not IcyVeins:Ready(12) and RuneOfPower:Down() then
 		return UseCooldown(RuneOfPower)
 	end
@@ -2408,6 +2418,9 @@ actions.st+=/frostbolt
 	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
 		return Ebonbolt
 	end
+	if MirrorsOfTorment:Usable() and Target.timeToDie > 8 then
+		UseCooldown(MirrorsOfTorment)
+	end
 	if ShiftingPower:Usable() and (not RuneOfPower.known or RuneOfPower:Down()) and (not FreezingWinds.known or FreezingWinds:Down()) and (GroveInvigoration.known or FieldOfBlossoms.known or FreezingWinds.known or Player.enemies >= 2) then
 		UseCooldown(ShiftingPower)
 	end
@@ -2473,6 +2486,9 @@ actions.aoe+=/frostbolt
 	end
 	if ShiftingPower:Usable() and not FrozenOrb:Ready(8) and (not FreezingWinds.known or FreezingWinds:Down()) then
 		UseCooldown(ShiftingPower)
+	end
+	if MirrorsOfTorment:Usable() and Target.timeToDie > 20 then
+		UseCooldown(MirrorsOfTorment)
 	end
 	if ArcaneExplosion:Usable() and not GlacialFragments.known and Player.enemies >= 6 and Player:ManaPct() > 30 then
 		return ArcaneExplosion
