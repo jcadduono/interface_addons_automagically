@@ -2491,7 +2491,7 @@ actions.aoe+=/frostbolt
 		UseCooldown(MirrorsOfTorment)
 	end
 	if ArcaneExplosion:Usable() and not GlacialFragments.known and Player.enemies >= 6 and Player:ManaPct() > 30 then
-		return ArcaneExplosion
+		UseCooldown(ArcaneExplosion)
 	end
 	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
 		return Ebonbolt
