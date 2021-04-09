@@ -3,5 +3,5 @@
 ## Notes: Automagically is an addon for mages that simplifies gameplay and maximizes DPS by doing all the decision making for you
 ## Author: jcadduono @ curseforge.com or Spy#1955 @ BattleTag
 ## SavedVariablesPerCharacter: Automagically
-## Version: 9.0.5-2
+## Version: 9.0.5-3
 Automagically.lua
