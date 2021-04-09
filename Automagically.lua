@@ -489,7 +489,7 @@ function Ability:Usable(seconds)
 end
 
 function Ability:Remains()
-	if self:Casting() or self:Traveling() then
+	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
 	local _, i, id, expires
@@ -525,20 +525,26 @@ end
 function Ability:SetVelocity(velocity)
 	if velocity > 0 then
 		self.velocity = velocity
-		self.travel_start = {}
+		self.traveling = {}
 	else
-		self.travel_start = nil
+		self.traveling = nil
 		self.velocity = 0
 	end
 end
 
-function Ability:Traveling()
-	if self.travel_start and self.travel_start[Target.guid] then
-		if Player.time - self.travel_start[Target.guid] < self.max_range / self.velocity then
-			return true
-		end
-		self.travel_start[Target.guid] = nil
+function Ability:Traveling(all)
+	if not self.traveling then
+		return 0
 	end
+	local count, cast, _ = 0
+	for _, cast in next, self.traveling do
+		if all or cast.dstGUID == Target.guid then
+			if Player.time - cast.start < self.max_range / self.velocity then
+				count = count + 1
+			end
+		end
+	end
+	return count
 end
 
 function Ability:TravelTime()
@@ -700,18 +706,38 @@ function Ability:Targets()
 	return 0
 end
 
-function Ability:CastSuccess(dstGUID)
+function Ability:CastSuccess(dstGUID, timeStamp)
+	self.last_used = timeStamp
 	Player.last_ability = self
-	self.last_used = Player.time
 	if self.triggers_gcd then
 		Player.previous_gcd[10] = nil
 		table.insert(Player.previous_gcd, 1, self)
 	end
-	if self.travel_start then
-		self.travel_start[dstGUID] = self.last_used
-		if not self.range_est_start then
-			self.range_est_start = self.last_used
+	if self.traveling and self.next_castGUID then
+		self.traveling[self.next_castGUID] = {
+			guid = self.next_castGUID,
+			start = self.last_used,
+			dstGUID = dstGUID,
+		}
+		self.next_castGUID = nil
+	end
+end
+
+function Ability:CastLanded(dstGUID, timeStamp, eventType)
+	if not self.traveling then
+		return
+	end
+	local guid, cast, oldest
+	for guid, cast in next, self.traveling do
+		if Player.time - cast.start >= self.max_range / self.velocity + 0.2 then
+			self.traveling[guid] = nil -- spell traveled 0.2s past max range, delete it, this should never happen
+		elseif cast.dstGUID == dstGUID and (not oldest or cast.start < oldest.start) then
+			oldest = cast
 		end
+	end
+	if oldest then
+		Target.estimated_range = min(self.max_range, floor(self.velocity * max(0, timeStamp - oldest.start)))
+		self.traveling[oldest.guid] = nil
 	end
 end
 
@@ -1577,7 +1603,7 @@ function GlacialSpike:Usable()
 end
 
 function WintersChill:Remains()
-	if Flurry:Traveling() then
+	if Flurry:Traveling() > 0 then
 		return self:Duration()
 	end
 	if self:Stack() == 0 then
@@ -1588,18 +1614,13 @@ end
 
 function WintersChill:Stack()
 	local stack
-	if Flurry:Traveling() then
+	if Flurry:Traveling() > 0 then
 		stack = 2
 	else
 		stack = Ability.Stack(self)
 	end
 	if stack > 0 then
-		if Frostbolt:Traveling() then
-			stack = stack - 1
-		end
-		if IceLance:Traveling() then
-			stack = stack - 1
-		end
+		stack = stack - Frostbolt:Traveling() - IceLance:Traveling()
 	end
 	return max(0, stack)
 end
@@ -1654,18 +1675,18 @@ function HotStreak:Remains()
 	return Ability.Remains(self)
 end
 
-function Blizzard:CastSuccess(dstGUID)
-	Ability.CastSuccess(self, dstGUID)
+function Blizzard:CastSuccess(dstGUID, timeStamp)
+	Ability.CastSuccess(self, dstGUID, timeStamp)
 	self.ground_duration = self:Duration()
 end
 
-function ArcanePower:CastSuccess(dstGUID)
-	Ability.CastSuccess(self, dstGUID)
+function ArcanePower:CastSuccess(dstGUID, timeStamp)
+	Ability.CastSuccess(self, dstGUID, timeStamp)
 	APL[SPEC.ARCANE]:toggle_burn_phase(true)
 end
 
-function Evocation:CastSuccess(dstGUID)
-	Ability.CastSuccess(self, dstGUID)
+function Evocation:CastSuccess(dstGUID, timeStamp)
+	Ability.CastSuccess(self, dstGUID, timeStamp)
 	APL[SPEC.ARCANE]:toggle_burn_phase(false)
 end
 
@@ -2204,7 +2225,7 @@ actions.standard_rotation+=/scorch
 		if HotStreak:Remains() < Fireball:CastTime() then
 			return Pyroblast
 		end
-		if Fireball:Previous() or Firestarter:Up() or Pyroblast:Traveling() then
+		if Fireball:Previous() or Firestarter:Up() or Pyroblast:Traveling(true) > 0 then
 			return Pyroblast
 		end
 	end
@@ -2949,7 +2970,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	UI:UpdateCombatWithin(0.05)
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		if srcGUID == Player.guid or ability.player_triggered then
-			ability:CastSuccess(dstGUID)
+			ability:CastSuccess(dstGUID, timeStamp)
 			if Opt.previous and amagicPanel:IsVisible() then
 				amagicPreviousPanel.ability = ability
 				amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
@@ -2988,13 +3009,7 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 		end
 	end
 	if eventType == 'SPELL_ABSORBED' or eventType == 'SPELL_MISSED' or eventType == 'SPELL_DAMAGE' or eventType == 'SPELL_AURA_APPLIED' or eventType == 'SPELL_AURA_REFRESH' then
-		if ability.travel_start and ability.travel_start[dstGUID] then
-			ability.travel_start[dstGUID] = nil
-		end
-		if ability.range_est_start then
-			Target.estimated_range = floor(ability.velocity * (Player.time - ability.range_est_start))
-			ability.range_est_start = nil
-		end
+		ability:CastLanded(dstGUID, timeStamp, eventType)
 		if Opt.previous and Opt.miss_effect and eventType == 'SPELL_MISSED' and amagicPanel:IsVisible() and ability == amagicPreviousPanel.ability then
 			amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'misseffect.blp')
 		end
@@ -3044,8 +3059,8 @@ function events:PLAYER_REGEN_ENABLED()
 	end
 	local _, ability, guid
 	for _, ability in next, abilities.velocity do
-		for guid in next, ability.travel_start do
-			ability.travel_start[guid] = nil
+		for guid in next, ability.traveling do
+			ability.traveling[guid] = nil
 		end
 	end
 	if Opt.auto_aoe then
@@ -3140,6 +3155,17 @@ function events:UNIT_SPELLCAST_STOP(srcName)
 	if Opt.interrupt and srcName == 'target' then
 		UI:UpdateCombatWithin(0.05)
 	end
+end
+
+function events:UNIT_SPELLCAST_SUCCEEDED(srcName, castGUID, spellId)
+	if srcName ~= 'player' or castGUID:sub(6, 6) ~= '3' then
+		return
+	end
+	local ability = spellId and abilities.bySpellId[spellId]
+	if not ability or not ability.traveling then
+		return
+	end
+	ability.next_castGUID = castGUID
 end
 
 function events:PLAYER_PVP_TALENT_UPDATE()
