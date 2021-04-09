@@ -2365,7 +2365,7 @@ APL[SPEC.FROST].st = function(self)
 		UseExtra(Freeze)
 	end
 --[[
-actions.st=flurry,if=(remaining_winters_chill=0|debuff.winters_chill.down)&(prev_gcd.1.ebonbolt|buff.brain_freeze.react&(prev_gcd.1.glacial_spike|prev_gcd.1.frostbolt&(!conduit.ire_of_the_ascended|cooldown.radiant_spark.remains|runeforge.freezing_winds)|prev_gcd.1.radiant_spark|buff.fingers_of_frost.react=0&(debuff.mirrors_of_torment.up|buff.freezing_winds.up|buff.expanded_potential.react)))
+actions.st=flurry,if=(remaining_winters_chill=0|debuff.winters_chill.down)&(prev_gcd.1.ebonbolt|buff.brain_freeze.react&(prev_gcd.1.glacial_spike|prev_gcd.1.frostbolt&(!conduit.ire_of_the_ascended|cooldown.radiant_spark.remains|runeforge.freezing_winds)|prev_gcd.1.radiant_spark|buff.fingers_of_frost.react=0&(debuff.mirrors_of_torment.up|buff.freezing_winds.up|buff.expanded_potential.react|buff.rune_of_power.up)))
 actions.st+=/frozen_orb,if=!runeforge.freezing_winds|buff.icy_veins.up|cooldown.icy_veins.remains>12
 actions.st+=/blizzard,if=buff.freezing_rain.up|active_enemies>=2
 actions.st+=/ray_of_frost,if=remaining_winters_chill=1&debuff.winters_chill.remains
@@ -2386,7 +2386,7 @@ actions.st+=/glacial_spike,if=buff.brain_freeze.react
 actions.st+=/blizzard,if=runeforge.freezing_winds&(cooldown.frozen_orb.remains>cooldown.icy_veins.remains+4|cooldown.frozen_orb.remains>cooldown.rune_of_power.remains+4)
 actions.st+=/frostbolt
 ]]
-	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FingersOfFrost:Down() and ((MirrorsOfTorment.known and MirrorsOfTorment:Up()) or (FreezingWinds.known and FreezingWinds:Up())))))) then
+	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FingersOfFrost:Down() and ((MirrorsOfTorment.known and MirrorsOfTorment:Up()) or (FreezingWinds.known and FreezingWinds:Up()) or (RuneOfPower.known and RuneOfPower:Up())))))) then
 		return Flurry
 	end
 	if FrozenOrb:Usable() and (not FreezingWinds.known or IcyVeins:Up() or IcyVeins:Cooldown() > 12) then
