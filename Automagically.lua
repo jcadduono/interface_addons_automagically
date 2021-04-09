@@ -700,6 +700,21 @@ function Ability:Targets()
 	return 0
 end
 
+function Ability:CastSuccess(dstGUID)
+	Player.last_ability = self
+	self.last_used = Player.time
+	if self.triggers_gcd then
+		Player.previous_gcd[10] = nil
+		table.insert(Player.previous_gcd, 1, self)
+	end
+	if self.travel_start then
+		self.travel_start[dstGUID] = self.last_used
+		if not self.range_est_start then
+			self.range_est_start = self.last_used
+		end
+	end
+end
+
 -- start DoT tracking
 
 local trackAuras = {}
@@ -1637,6 +1652,21 @@ function HotStreak:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function Blizzard:CastSuccess(dstGUID)
+	Ability.CastSuccess(self, dstGUID)
+	self.ground_duration = self:Duration()
+end
+
+function ArcanePower:CastSuccess(dstGUID)
+	Ability.CastSuccess(self, dstGUID)
+	APL[SPEC.ARCANE]:toggle_burn_phase(true)
+end
+
+function Evocation:CastSuccess(dstGUID)
+	Ability.CastSuccess(self, dstGUID)
+	APL[SPEC.ARCANE]:toggle_burn_phase(false)
 end
 
 -- End Ability Modifications
@@ -2919,33 +2949,12 @@ function events:COMBAT_LOG_EVENT_UNFILTERED()
 	UI:UpdateCombatWithin(0.05)
 	if eventType == 'SPELL_CAST_SUCCESS' then
 		if srcGUID == Player.guid or ability.player_triggered then
-			Player.last_ability = ability
-			ability.last_used = Player.time
-			if ability.triggers_gcd then
-				Player.previous_gcd[10] = nil
-				table.insert(Player.previous_gcd, 1, ability)
-			end
-			if ability.travel_start then
-				ability.travel_start[dstGUID] = Player.time
-				if not ability.range_est_start then
-					ability.range_est_start = Player.time
-				end
-			end
+			ability:CastSuccess(dstGUID)
 			if Opt.previous and amagicPanel:IsVisible() then
 				amagicPreviousPanel.ability = ability
 				amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'border.blp')
 				amagicPreviousPanel.icon:SetTexture(ability.icon)
 				amagicPreviousPanel:Show()
-			end
-			if Player.spec == SPEC.ARCANE then
-				if ability == ArcanePower then
-					APL[SPEC.ARCANE]:toggle_burn_phase(true)
-				elseif ability == Evocation then
-					APL[SPEC.ARCANE]:toggle_burn_phase(false)
-				end
-			end
-			if ability == Blizzard then
-				ability.ground_duration = ability:Duration()
 			end
 		end
 		if Player.pet_stuck and ability.requires_pet then
