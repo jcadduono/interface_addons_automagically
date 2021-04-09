@@ -2366,7 +2366,7 @@ APL[SPEC.FROST].st = function(self)
 	end
 --[[
 actions.st=flurry,if=(remaining_winters_chill=0|debuff.winters_chill.down)&(prev_gcd.1.ebonbolt|buff.brain_freeze.react&(prev_gcd.1.glacial_spike|prev_gcd.1.frostbolt&(!conduit.ire_of_the_ascended|cooldown.radiant_spark.remains|runeforge.freezing_winds)|prev_gcd.1.radiant_spark|buff.fingers_of_frost.react=0&(debuff.mirrors_of_torment.up|buff.freezing_winds.up|buff.expanded_potential.react)))
-actions.st+=/frozen_orb
+actions.st+=/frozen_orb,if=!runeforge.freezing_winds|buff.icy_veins.up|cooldown.icy_veins.remains>12
 actions.st+=/blizzard,if=buff.freezing_rain.up|active_enemies>=2
 actions.st+=/ray_of_frost,if=remaining_winters_chill=1&debuff.winters_chill.remains
 actions.st+=/glacial_spike,if=remaining_winters_chill&debuff.winters_chill.remains>cast_time+travel_time
@@ -2383,13 +2383,13 @@ actions.st+=/shifting_power,if=buff.rune_of_power.down&(!runeforge.freezing_wind
 actions.st+=/arcane_explosion,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_arcane.down
 actions.st+=/fire_blast,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_fire.down
 actions.st+=/glacial_spike,if=buff.brain_freeze.react
-actions.st+=/blizzard,if=runeforge.freezing_winds&(cooldown.frozen_orb.remains>cooldown.icy_veins.remains|cooldown.frozen_orb.remains>cooldown.rune_of_power.remains)
+actions.st+=/blizzard,if=runeforge.freezing_winds&(cooldown.frozen_orb.remains>cooldown.icy_veins.remains+4|cooldown.frozen_orb.remains>cooldown.rune_of_power.remains+4)
 actions.st+=/frostbolt
 ]]
 	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FingersOfFrost:Down() and ((MirrorsOfTorment.known and MirrorsOfTorment:Up()) or (FreezingWinds.known and FreezingWinds:Up())))))) then
 		return Flurry
 	end
-	if FrozenOrb:Usable() then
+	if FrozenOrb:Usable() and (not FreezingWinds.known or IcyVeins:Up() or IcyVeins:Cooldown() > 12) then
 		UseCooldown(FrozenOrb)
 	end
 	if Blizzard:Usable() and (Player.enemies >= 2 or (FreezingRain.known and FreezingRain:Up())) then
@@ -2428,7 +2428,7 @@ actions.st+=/frostbolt
 	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
 		return GlacialSpike
 	end
-	if FreezingWinds.known and Blizzard:Usable() and ((FrozenOrb:Cooldown() > IcyVeins:Cooldown()) or (RuneOfPower.known and FrozenOrb:Cooldown() > RuneOfPower:Cooldown())) then
+	if FreezingWinds.known and Blizzard:Usable() and ((FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) or (RuneOfPower.known and FrozenOrb:Cooldown() > (RuneOfPower:Cooldown() + 4))) then
 		UseCooldown(Blizzard)
 	end
 	if Frostbolt:Usable() then
