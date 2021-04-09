@@ -2378,14 +2378,15 @@ actions.st+=/radiant_spark,if=buff.brain_freeze.react&talent.glacial_spike&condu
 actions.st+=/ice_lance,if=buff.fingers_of_frost.react|debuff.frozen.remains>travel_time
 actions.st+=/ebonbolt
 actions.st+=/radiant_spark,if=(!talent.glacial_spike|!conduit.ire_of_the_ascended)&(!runeforge.freezing_winds|active_enemies>=2)&buff.brain_freeze.react
-actions.st+=/mirrors_of_torment
+actions.st+=/mirrors_of_torment,if=buff.icy_veins.up|cooldown.icy_veins.remains>80|target.time_to_die<25+cooldown.icy_veins.remains
 actions.st+=/shifting_power,if=buff.rune_of_power.down&(!runeforge.freezing_winds|buff.freezing_winds.down)&(soulbind.grove_invigoration|soulbind.field_of_blossoms|runeforge.freezing_winds|active_enemies>=2)
 actions.st+=/arcane_explosion,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_arcane.down
 actions.st+=/fire_blast,if=runeforge.disciplinary_command&cooldown.buff_disciplinary_command.ready&buff.disciplinary_command_fire.down
 actions.st+=/glacial_spike,if=buff.brain_freeze.react
+actions.st+=/blizzard,if=runeforge.freezing_winds&(cooldown.frozen_orb.remains>cooldown.icy_veins.remains|cooldown.frozen_orb.remains>cooldown.rune_of_power.remains)
 actions.st+=/frostbolt
 ]]
-	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FreezingWinds.known and FreezingWinds:Up() and FingersOfFrost:Down())))) then
+	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FingersOfFrost:Down() and ((MirrorsOfTorment.known and MirrorsOfTorment:Up()) or (FreezingWinds.known and FreezingWinds:Up())))))) then
 		return Flurry
 	end
 	if FrozenOrb:Usable() then
@@ -2418,7 +2419,7 @@ actions.st+=/frostbolt
 	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
 		return Ebonbolt
 	end
-	if MirrorsOfTorment:Usable() and Target.timeToDie > 8 then
+	if MirrorsOfTorment:Usable() and Target.timeToDie > 8 and (IcyVeins:Up() or IcyVeins:Cooldown() > 80 or Target.timeToDie < (25 + IcyVeins:Cooldown())) then
 		UseCooldown(MirrorsOfTorment)
 	end
 	if ShiftingPower:Usable() and (not RuneOfPower.known or RuneOfPower:Down()) and (not FreezingWinds.known or FreezingWinds:Down()) and (GroveInvigoration.known or FieldOfBlossoms.known or FreezingWinds.known or Player.enemies >= 2) then
@@ -2426,6 +2427,9 @@ actions.st+=/frostbolt
 	end
 	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
 		return GlacialSpike
+	end
+	if FreezingWinds.known and Blizzard:Usable() and ((FrozenOrb:Cooldown() > IcyVeins:Cooldown()) or (RuneOfPower.known and FrozenOrb:Cooldown() > RuneOfPower:Cooldown())) then
+		UseCooldown(Blizzard)
 	end
 	if Frostbolt:Usable() then
 		return Frostbolt
