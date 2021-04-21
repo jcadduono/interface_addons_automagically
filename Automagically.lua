@@ -2479,7 +2479,7 @@ actions.st+=/frostbolt
 	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
 		return GlacialSpike
 	end
-	if FreezingWinds.known and Blizzard:Usable() and ((FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) or (RuneOfPower.known and FrozenOrb:Cooldown() > (RuneOfPower:Cooldown() + 4))) then
+	if FreezingWinds.known and Blizzard:Usable() and Player.enemies == 1 and Target.timeToDie > (RuneOfPower:Cooldown() + 4) and ((FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) or (RuneOfPower.known and FrozenOrb:Cooldown() > (RuneOfPower:Cooldown() + 4))) then
 		UseCooldown(Blizzard)
 	end
 	if Frostbolt:Usable() then
