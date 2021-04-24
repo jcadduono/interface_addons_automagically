@@ -442,6 +442,7 @@ function Ability:Add(spellId, buff, player, spellId2)
 		hasted_cooldown = false,
 		hasted_ticks = false,
 		known = false,
+		rank = 0,
 		mana_cost = 0,
 		cooldown_duration = 0,
 		buff_duration = 0,
@@ -1067,13 +1068,6 @@ local Icicles = Ability:Add(76613, true, true, 205473)
 Icicles.buff_duration = 60
 local WintersChill = Ability:Add(228358, false, true)
 WintersChill.buff_duration = 6
--- PvP talents
-local BurstOfCold = Ability:Add(206431, true, true, 206432)
-BurstOfCold.buff_duration = 6
-local Frostbite = Ability:Add(198120, false, true, 198121)
-Frostbite.buff_duration = 4
--- Racials
-
 -- Covenant abilities
 local MirrorsOfTorment = Ability:Add(314793, false, true) -- Venthyr
 MirrorsOfTorment.cooldown_duration = 90
@@ -1101,6 +1095,13 @@ GlacialFragments:AutoAoe()
 local SlickIce = Ability:Add(327508, true, true, 327509)
 SlickIce.buff_duration = 60
 SlickIce.bonus_id = 6823
+-- PvP talents
+local BurstOfCold = Ability:Add(206431, true, true, 206432)
+BurstOfCold.buff_duration = 6
+local Frostbite = Ability:Add(198120, false, true, 198121)
+Frostbite.buff_duration = 4
+-- Racials
+
 -- Trinket effects
 
 -- End Abilities
@@ -1284,11 +1285,11 @@ function Player:InArenaOrBattleground()
 end
 
 function Player:UpdateAbilities()
-	Player.mana_base = BaseMana[UnitLevel('player')] * 5
-	Player.arcane_charges_max = UnitPowerMax('player', 16)
+	self.mana_base = BaseMana[UnitLevel('player')] * 5
+	self.arcane_charges_max = UnitPowerMax('player', 16)
+	self.rescan_abilities = false
 
 	local _, ability, spellId, node
-
 	for _, ability in next, abilities.all do
 		ability.known = false
 		for _, spellId in next, ability.spellIds do
@@ -1308,8 +1309,13 @@ function Player:UpdateAbilities()
 			node = C_Soulbinds.FindNodeIDActuallyInstalled(C_Soulbinds.GetActiveSoulbindID(), ability.conduit_id)
 			if node then
 				node = C_Soulbinds.GetNode(node)
-				if node and node.state == 3 then
-					ability.known = true
+				if node then
+					if node.conduitID == 0 then
+						self.rescan_abilities = true -- rescan on next target, conduit data has not finished loading
+					else
+						ability.known = node.state == 3
+						ability.rank = node.conduitRank
+					end
 				end
 			end
 		end
@@ -2479,7 +2485,7 @@ actions.st+=/frostbolt
 	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
 		return GlacialSpike
 	end
-	if FreezingWinds.known and Blizzard:Usable() and Player.enemies == 1 and Target.timeToDie > (RuneOfPower:Cooldown() + 4) and ((FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) or (RuneOfPower.known and FrozenOrb:Cooldown() > (RuneOfPower:Cooldown() + 4))) then
+	if FreezingWinds.known and Blizzard:Usable() and (not Target.boss or Target.timeToDie > (RuneOfPower:Cooldown() + 4)) and ((FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) or (RuneOfPower.known and FrozenOrb:Cooldown() > (RuneOfPower:Cooldown() + 4))) then
 		UseCooldown(Blizzard)
 	end
 	if Frostbolt:Usable() then
@@ -3029,6 +3035,9 @@ end
 
 function events:PLAYER_TARGET_CHANGED()
 	Target:Update()
+	if Player.rescan_abilities then
+		Player:UpdateAbilities()
+	end
 end
 
 function events:UNIT_FACTION(unitID)
@@ -3145,7 +3154,7 @@ function events:UNIT_POWER_UPDATE(srcName, powerType)
 	end
 end
 
-function events:UNIT_SPELLCAST_START(srcName, castId, spellId)
+function events:UNIT_SPELLCAST_START(srcName)
 	if Opt.interrupt and srcName == 'target' then
 		UI:UpdateCombatWithin(0.05)
 	end
@@ -3483,7 +3492,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 	end
 	if msg[1] == 'ttd' then
 		if msg[2] then
-			Opt.cd_ttd = tonumber(msg[2]) or 10
+			Opt.cd_ttd = tonumber(msg[2]) or 8
 		end
 		return Status('Minimum enemy lifetime to use cooldowns on (ignored on bosses)', Opt.cd_ttd, 'seconds')
 	end
