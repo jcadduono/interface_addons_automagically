@@ -640,7 +640,7 @@ function Ability:Traveling(all)
 	local count = 0
 	for _, cast in next, self.traveling do
 		if all or cast.dstGUID == Target.guid then
-			if Player.time - cast.start < self.max_range / self.velocity then
+			if Player.time - cast.start < self.max_range / self.velocity + (self.travel_delay or 0) then
 				count = count + 1
 			end
 		end
@@ -649,7 +649,7 @@ function Ability:Traveling(all)
 end
 
 function Ability:TravelTime()
-	return Target.estimated_range / self.velocity
+	return Target.estimated_range / self.velocity + (self.travel_delay or 0)
 end
 
 function Ability:Ticking()
@@ -663,7 +663,7 @@ function Ability:Ticking()
 	end
 	if self.traveling then
 		for _, cast in next, self.traveling do
-			if Player.time - cast.start < self.max_range / self.velocity then
+			if Player.time - cast.start < self.max_range / self.velocity + (self.travel_delay or 0) then
 				ticking[cast.dstGUID] = true
 			end
 		end
@@ -887,19 +887,19 @@ function Ability:CastLanded(dstGUID, event, missType)
 	if self.traveling then
 		local oldest
 		for guid, cast in next, self.traveling do
-			if Player.time - cast.start >= self.max_range / self.velocity + 0.2 then
+			if Player.time - cast.start >= self.max_range / self.velocity + (self.travel_delay or 0) + 0.2 then
 				self.traveling[guid] = nil -- spell traveled 0.2s past max range, delete it, this should never happen
 			elseif cast.dstGUID == dstGUID and (not oldest or cast.start < oldest.start) then
 				oldest = cast
 			end
 		end
 		if oldest then
-			Target.estimated_range = floor(clamp(self.velocity * max(0, Player.time - oldest.start), 0, self.max_range))
+			Target.estimated_range = floor(clamp(self.velocity * max(0, Player.time - oldest.start - (self.travel_delay or 0)), 0, self.max_range))
 			self.traveling[oldest.guid] = nil
 		end
 	end
 	if self.range_est_start then
-		Target.estimated_range = floor(clamp(self.velocity * (Player.time - self.range_est_start), 5, self.max_range))
+		Target.estimated_range = floor(clamp(self.velocity * (Player.time - self.range_est_start - (self.travel_delay or 0)), 5, self.max_range))
 		self.range_est_start = nil
 	elseif self.max_range < Target.estimated_range then
 		Target.estimated_range = self.max_range
@@ -1182,6 +1182,7 @@ Meteor:AutoAoe()
 local PhoenixFlames = Ability:Add(257541, false, true, 257542)
 PhoenixFlames.cooldown_duration = 25
 PhoenixFlames.requires_charge = true
+PhoenixFlames.travel_delay = 0.1
 PhoenixFlames:SetVelocity(50)
 PhoenixFlames:AutoAoe()
 local Pyroblast = Ability:Add(11366, false, true)
@@ -2096,7 +2097,7 @@ actions+=/scorch
 		UseCooldown(TimeWarp)
 	end
 	self.hot_streak_spells_in_flight = HeatingUp:Up() and (
-		(PhoenixFlames.known and AlexstraszasFury.known and HeatingUp:Up() and PhoenixFlames:Traveling() or 0) +
+		(PhoenixFlames.known and AlexstraszasFury.known and PhoenixFlames:Traveling() or 0) +
 		(Combustion:Up() and HeatingUp:Up() and (Fireball:Traveling(true) + Pyroblast:Traveling(true)) or 0) +
 		(Firestarter.known and Firestarter:Up() and (Fireball:Traveling() + Pyroblast:Traveling()) or 0) +
 		(Hyperthermia.known and Hyperthermia:Up() and Pyroblast:Traveling(true) or 0)
@@ -2221,7 +2222,7 @@ actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combus
 	) then
 		return UseCooldown(Meteor)
 	end
-	if AlexstraszasFury.known and DragonsBreath:Usable() and Combustion:Down() and HotStreak:Down() and (FeelTheBurn:Up() or Player:TimeInCombat() > 15) and (TemperedFlames.known or (not TemperedFlames.known and Firestarter:Down())) then
+	if AlexstraszasFury.known and DragonsBreath:Usable() and Target.estimated_range < 15 and Combustion:Down() and HotStreak:Down() and (FeelTheBurn:Up() or Player:TimeInCombat() > 15) and (TemperedFlames.known or (not TemperedFlames.known and Firestarter:Down())) then
 		return UseCooldown(DragonsBreath)
 	end
 end
@@ -2415,7 +2416,7 @@ actions.standard_rotation+=/fireball
 	end
 	if PhoenixFlames:Usable() and HotStreak:Down() and (
 		(not AlexstraszasFury.known and not self.phoenix_pooling and FlamesFury:Up()) or
-		(AlexstraszasFury.known and self.hot_streak_spells_in_flight == 0 and (
+		(AlexstraszasFury.known and self.hot_streak_spells_in_flight == 0 and PhoenixFlames:Traveling() == 0 and (
 			(not self.phoenix_pooling and FlamesFury:Up()) or
 			PhoenixFlames:ChargesFractional() > 2.5 or
 			PhoenixFlames:ChargesFractional() > 1.5 and FeelTheBurn:Remains() < (2 * Player.gcd)
@@ -2425,7 +2426,7 @@ actions.standard_rotation+=/fireball
 	end
 	local apl = self:active_talents()
 	if apl then return apl end
-	if DragonsBreath:Usable() and Player.enemies > 1 then
+	if DragonsBreath:Usable() and Player.enemies > 1 and Target.estimated_range < 15 then
 		UseCooldown(DragonsBreath)
 	end
 	if Scorch:Usable() and SearingTouch:Up() then
