@@ -1116,7 +1116,7 @@ local BlazingBarrier = Ability:Add(235313, true, true)
 BlazingBarrier.mana_cost = 3
 BlazingBarrier.buff_duration = 60
 BlazingBarrier.cooldown_duration = 25
-local CharringEmbers = Ability:Add(408665, true, true) -- T30 2pc
+local CharringEmbers = Ability:Add(408665, false, true) -- T30 2pc
 CharringEmbers.buff_duration = 12
 local Combustion = Ability:Add(190319, true, true)
 Combustion.mana_cost = 10
@@ -1999,6 +1999,13 @@ function Meteor:LandingIn(seconds)
 		return false
 	end
 	return (3 - (Player.time - Meteor.last_used)) < seconds
+end
+
+function CharringEmbers:Remains()
+	if self.known and PhoenixFlames:Traveling() > 0 then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
 end
 
 function Blizzard:CastSuccess(...)
