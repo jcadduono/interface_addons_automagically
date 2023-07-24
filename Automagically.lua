@@ -106,7 +106,7 @@ local function InitOpts()
 		aoe = false,
 		auto_aoe = false,
 		auto_aoe_ttl = 10,
-		cd_ttd = 8,
+		cd_ttd = 10,
 		pot = false,
 		trinket = true,
 		barrier = true,
@@ -2100,7 +2100,7 @@ actions+=/ice_nova,if=!searing_touch.active
 actions+=/scorch
 ]]
 	self:combustion_timing()
-	if TemporalWarp.known and TimeWarp:Usable() and Player:Exhausted() then
+	if self.use_cds and TemporalWarp.known and TimeWarp:Usable() and Player:Exhausted() then
 		UseCooldown(TimeWarp)
 	end
 	self.hot_streak_spells_in_flight = HeatingUp:Up() and (
@@ -2119,7 +2119,7 @@ actions+=/scorch
 		apl = self:combustion_phase()
 		if apl then return apl end
 	end
-	if ShiftingPower:Usable() and self.shifting_power_before_combustion and Combustion:Down() and (FireBlast:Charges() == 0 or self.fire_blast_pooling) and HotStreak:Down() then
+	if self.use_cds and ShiftingPower:Usable() and self.shifting_power_before_combustion and Combustion:Down() and (FireBlast:Charges() == 0 or self.fire_blast_pooling) and HotStreak:Down() then
 		UseCooldown(ShiftingPower)
 	end
 	if Player.enemies < self.combustion_flamestrike then
@@ -2208,7 +2208,8 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time_to_combustion,value=raid_event.vulnerable.in*!raid_event.vulnerable.up,if=raid_event.vulnerable.exists&variable.combustion_ready_time<raid_event.vulnerable.in
 actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time_to_combustion,value=variable.combustion_ready_time,if=variable.combustion_ready_time+cooldown.combustion.duration*(1-(0.4+0.2*talent.firestarter)*talent.kindling)<=variable.time_to_combustion|variable.time_to_combustion>fight_remains-20
 ]]
-	self.combustion_ready_time = Combustion:CooldownExpected()
+	self.use_cds = (Target.boss and Player.group_size >= 10) or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or Combustion:Remains() > self.skb_duration
+	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Fireball:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
 	self.time_to_combustion = self.combustion_ready_time
 end
@@ -2223,7 +2224,7 @@ actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combus
 	if LivingBomb:Usable() and Player.enemies > 1 and Combustion:Down() and (self.time_to_combustion <= 0 or self.time_to_combustion > LivingBomb:CooldownDuration()) then
 		return UseCooldown(LivingBomb)
 	end
-	if Meteor:Usable() and (
+	if self.use_cds and Meteor:Usable() and (
 		self.time_to_combustion <= 0 or Combustion:Remains() > 3 or
 		(not SunKingsBlessing.known and (Meteor:CooldownDuration() < self.time_to_combustion or (Target.boss and Target.timeToDie < self.time_to_combustion)))
 	) then
@@ -2277,7 +2278,7 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 	end
 	local apl = self:active_talents()
 	if apl then return apl end
-	if Combustion:Down() then
+	if self.use_cds and Combustion:Down() then
 		if Combustion:Usable() and self.hot_streak_spells_in_flight == 0 and self.time_to_combustion <= 0 and ((Player.cast.remains < self.combustion_cast_remains and (Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting())) or Meteor:LandingIn(self.combustion_cast_remains)) then
 			UseCooldown(Combustion)
 		end
@@ -2308,7 +2309,7 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 	) then
 		return Pyroblast
 	end
-	if ShiftingPower:Usable() and Combustion:Up() and Player.enemies >= self.combustion_shifting_power and FireBlast:Charges() == 0 and (AlexstraszasFury.known or PhoenixFlames:Charges() < 3) then
+	if self.use_cds and ShiftingPower:Usable() and Combustion:Up() and Player.enemies >= self.combustion_shifting_power and FireBlast:Charges() == 0 and (AlexstraszasFury.known or PhoenixFlames:Charges() < 3) then
 		UseCooldown(ShiftingPower)
 	end
 	if SunKingsBlessing.known and FuryOfTheSunKing:Up() then
@@ -3454,7 +3455,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 	end
 	if msg[1] == 'ttd' then
 		if msg[2] then
-			Opt.cd_ttd = tonumber(msg[2]) or 8
+			Opt.cd_ttd = tonumber(msg[2]) or 10
 		end
 		return Status('Minimum enemy lifetime to use cooldowns on (ignored on bosses)', Opt.cd_ttd, 'seconds')
 	end
