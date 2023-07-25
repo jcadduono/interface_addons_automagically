@@ -2279,6 +2279,10 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 	if CharringEmbers.known and PhoenixFlames:Usable() and PhoenixFlames:Traveling() == 0 and CharringEmbers:Remains() < (2 * Player.gcd) then
 		return PhoenixFlames
 	end
+	if not Meteor:LandingIn(3) then
+		local apl = self:active_talents()
+		if apl then return apl end
+	end
 	if self.use_cds and Combustion:Down() then
 		if Combustion:Usable() and self.hot_streak_spells_in_flight == 0 and self.time_to_combustion <= 0 and ((Player.cast.remains < self.combustion_cast_remains and (Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting())) or Meteor:LandingIn(self.combustion_cast_remains)) then
 			UseCooldown(Combustion)
@@ -2297,10 +2301,6 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 		if Scorch:Usable() and Combustion:Ready(Scorch:CastTime()) then
 			return Scorch
 		end
-	end
-	if not Meteor:LandingIn(3) then
-		local apl = self:active_talents()
-		if apl then return apl end
 	end
 	if FireBlast:Usable() and not self.fire_blast_pooling and (SearingTouch:Down() or Scorch:Casting() or ImprovedScorch:Remains() > 3) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and self.hot_streak_spells_in_flight == 0 then
 		UseExtra(FireBlast, true)
