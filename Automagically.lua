@@ -2063,6 +2063,7 @@ APL[SPEC.ARCANE].Main = function(self)
 end
 
 APL[SPEC.FIRE].Main = function(self)
+	self:combustion_timing()
 	if Player:TimeInCombat() == 0 then
 		if Opt.barrier and BlazingBarrier:Usable() and BlazingBarrier:Remains() < 15 then
 			UseCooldown(BlazingBarrier)
@@ -2073,7 +2074,7 @@ APL[SPEC.FIRE].Main = function(self)
 	else
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 10 then
 			UseExtra(ArcaneIntellect)
-		elseif Opt.barrier and BlazingBarrier:Usable() and BlazingBarrier:Remains() < 5 then
+		elseif Opt.barrier and BlazingBarrier:Usable() and BlazingBarrier:Remains() < 5 and self.time_to_combustion > 0 and Combustion:Down() then
 			UseExtra(BlazingBarrier)
 		elseif MirrorImage:Usable() and Player:UnderAttack() then
 			UseExtra(MirrorImage)
@@ -2102,7 +2103,6 @@ actions+=/call_action_list,name=standard_rotation,if=variable.time_to_combustion
 actions+=/ice_nova,if=!searing_touch.active
 actions+=/scorch
 ]]
-	self:combustion_timing()
 	if self.use_cds and TemporalWarp.known and TimeWarp:Usable() and Player:Exhausted() then
 		UseCooldown(TimeWarp)
 	end
