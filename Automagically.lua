@@ -1147,6 +1147,7 @@ local Flamestrike = Ability:Add(2120, false, true)
 Flamestrike.mana_cost = 2.5
 Flamestrike.buff_duration = 8
 Flamestrike:AutoAoe()
+local FuelTheFlames = Ability:Add(416094, false, true)
 local FuryOfTheSunKing = Ability:Add(383883, true, true)
 FuryOfTheSunKing.buff_duration = 30
 local Hyperthermia = Ability:Add(383860, true, true, 383874)
@@ -1952,7 +1953,8 @@ end
 
 function HeatingUp:Remains()
 	if (
-		(Scorch:Casting() and ((SearingTouch.known and SearingTouch:Up()) or (Combustion.known and Combustion:Up())))
+		(SearingTouch.known and Scorch:Casting() and SearingTouch:Up()) or
+		(Combustion.known and (Scorch:Casting() or (FuelTheFlames.known and Flamestrike:Casting())) and Combustion:Up())
 	) then
 		if Ability.Remains(self) > 0 or Ability.Remains(HotStreak) > 0 then
 			return 0
@@ -1964,7 +1966,8 @@ end
 
 function HotStreak:Remains()
 	if Ability.Remains(HeatingUp) > 0 and (
-		(Scorch:Casting() and ((SearingTouch.known and SearingTouch:Up()) or (Combustion.known and Combustion:Up())))
+		(SearingTouch.known and Scorch:Casting() and SearingTouch:Up()) or
+		(Combustion.known and (Scorch:Casting() or (FuelTheFlames.known and Flamestrike:Casting())) and Combustion:Up())
 	) then
 		return self:Duration()
 	end
