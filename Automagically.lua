@@ -240,6 +240,22 @@ local Player = {
 	major_cd_remains = 0,
 }
 
+-- current pet information
+local Pet = {
+	active = false,
+	alive = false,
+	stuck = false,
+	health = {
+		current = 0,
+		max = 100,
+		pct = 100,
+	},
+	mana = {
+		current = 0,
+		max = 100,
+	},
+}
+
 -- current target information
 local Target = {
 	boss = false,
@@ -580,6 +596,9 @@ function Ability:Usable(seconds, pool)
 	if not self.known then
 		return false
 	end
+	if self.requires_pet and not Pet.active then
+		return false
+	end
 	if self:ManaCost() > Player.mana.current then
 		return false
 	end
@@ -854,6 +873,12 @@ function Ability:Targets()
 	return 0
 end
 
+function Ability:CastFailed(dstGUID, missType)
+	if self.requires_pet and missType == 'No path available' then
+		Pet.stuck = true
+	end
+end
+
 function Ability:CastSuccess(dstGUID)
 	self.last_used = Player.time
 	Player.last_ability = self
@@ -866,6 +891,9 @@ function Ability:CastSuccess(dstGUID)
 	end
 	if Opt.auto_aoe and self.auto_aoe and self.auto_aoe.trigger == 'SPELL_CAST_SUCCESS' then
 		AutoAoe:Add(dstGUID, true)
+	end
+	if self.requires_pet then
+		Pet.stuck = false
 	end
 	if self.traveling and self.next_castGUID then
 		self.traveling[self.next_castGUID] = {
@@ -1663,6 +1691,8 @@ function Player:Update()
 	self.moving = GetUnitSpeed('player') ~= 0
 	self:UpdateThreat()
 
+	Pet:Update()
+
 	trackAuras:Purge()
 	if Opt.auto_aoe then
 		for _, ability in next, Abilities.autoAoe do
@@ -1703,6 +1733,18 @@ function Player:Init()
 end
 
 -- End Player Functions
+
+-- Start Pet Functions
+
+function Pet:Update()
+	self.guid = UnitGUID('pet')
+	self.alive = self.guid and not UnitIsDead('pet')
+	self.active = (self.alive and not self.stuck or IsFlying()) and true
+	self.mana.max = self.active and UnitPowerMax('pet', 0) or 100
+	self.mana.current = UnitPower('pet', 0)
+end
+
+-- End Pet Functions
 
 -- Start Target Functions
 
@@ -2457,14 +2499,198 @@ actions.standard_rotation+=/fireball
 end
 
 APL[SPEC.FROST].Main = function(self)
+--[[
+
+]]
 	if Player:TimeInCombat() == 0 then
+		if Opt.barrier and IceBarrier:Usable() and IceBarrier:Down() then
+			UseExtra(IceBarrier)
+		end
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 300 then
 			return ArcaneIntellect
 		end
-	else
-		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 10 then
-			UseExtra(ArcaneIntellect)
+		if SummonWaterElemental:Usable() and not Pet.active then
+			return SummonWaterElemental
 		end
+		if Player.enemies >= 2 then
+			if Blizzard:Usable() then
+				return Blizzard
+			end
+		elseif Frostbolt:Usable() and not Frostbolt:Casting() then
+			return Frostbolt
+		end
+	else
+		if ArcaneIntellect:Down() and ArcaneIntellect:Usable() then
+			UseExtra(ArcaneIntellect)
+		elseif SummonWaterElemental:Usable() and not Pet.active then
+			UseExtra(SummonWaterElemental)
+		elseif MirrorImage:Usable() and Player:UnderAttack() then
+			UseExtra(MirrorImage)
+		elseif Opt.barrier and IceBarrier:Usable() and IceBarrier:Down() then
+			UseExtra(IceBarrier)
+		end
+	end
+--[[
+
+]]
+	self.use_cds = Target.boss or Target.timeToDie > Opt.cd_ttd or IcyVeins:Up()
+	if self.use_cds then
+		self:cooldowns()
+	end
+	local apl
+	if Player.enemies >= 3 then
+		apl = self:aoe()
+	else
+		apl = self:st()
+	end
+	if apl then return apl end
+	if Player.moving then
+		return self:movement()
+	end
+end
+
+APL[SPEC.FROST].cooldowns = function(self)
+	-- Let's not waste a shatter with a cooldown's GCD
+	if Ebonbolt:Previous() or (GlacialSpike:Previous() and BrainFreeze:Up()) then
+		return
+	end
+--[[
+
+]]
+	if IcyVeins:Usable() and IcyVeins:Down() and (Player.enemies >= 2 or (not SlickIce.known or SlickIce:Down())) then
+		return UseCooldown(IcyVeins)
+	end
+	if Opt.trinket then
+		if Trinket1:Usable() then
+			return UseCooldown(Trinket1)
+		elseif Trinket2:Usable() then
+			return UseCooldown(Trinket2)
+		end
+	end
+end
+
+APL[SPEC.FROST].movement = function(self)
+--[[
+
+]]
+	if Blink:Usable() then
+		UseExtra(Blink)
+	elseif Shimmer:Usable() then
+		UseExtra(Shimmer)
+	elseif IceFloes:Usable() and IceFloes:Down() then
+		UseExtra(IceFloes)
+	end
+	if ArcaneExplosion:Usable() and Player:ManaPct() > 30 and Player.enemies >= 2 then
+		return ArcaneExplosion
+	end
+	if FireBlast:Usable() then
+		return FireBlast
+	end
+	if IceLance:Usable() then
+		return IceLance
+	end
+end
+
+APL[SPEC.FROST].st = function(self)
+	if Freeze:Usable() and not Target:Frozen() and (CometStorm:Previous() or (BrainFreeze:Down() and (Ebonbolt:Casting() or GlacialSpike:Casting()))) then
+		UseExtra(Freeze)
+	end
+--[[
+
+]]
+	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and (GlacialSpike:Previous() or Frostbolt:Previous() or (FingersOfFrost:Down() and ((FreezingWinds.known and FreezingWinds:Up())))))) then
+		return Flurry
+	end
+	if FrozenOrb:Usable() and (not FreezingWinds.known or IcyVeins:Up() or IcyVeins:Cooldown() > 12) then
+		UseCooldown(FrozenOrb)
+	end
+	if Blizzard:Usable() and (Player.enemies >= 2 or (FreezingRain.known and FreezingRain:Up())) then
+		return Blizzard
+	end
+	if RayOfFrost:Usable() and WintersChill:Stack() == 1 and Target.timeToDie > (5 * Player.haste_factor) then
+		return RayOfFrost
+	end
+	if GlacialSpike:Usable() and WintersChill:Remains() > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
+		return GlacialSpike
+	end
+	if IceLance:Usable() and WintersChill:Stack() > FingersOfFrost:Stack() and WintersChill:Remains() > IceLance:TravelTime() then
+		return IceLance
+	end
+	if CometStorm:Usable() and not Player.cd then
+		if Freeze:Usable() and not Target:Frozen() then
+			UseExtra(Freeze)
+		end
+		UseCooldown(CometStorm)
+	end
+	if IceNova:Usable() then
+		return IceNova
+	end
+	if IceLance:Usable() and (FingersOfFrost:Up() or (Target:Frozen() and not IceLance:Previous())) then
+		return IceLance
+	end
+	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
+		return Ebonbolt
+	end
+	if ShiftingPower:Usable() and (not FreezingWinds.known or FreezingWinds:Down()) and (GroveInvigoration.known or FieldOfBlossoms.known or FreezingWinds.known or Player.enemies >= 2) then
+		UseCooldown(ShiftingPower)
+	end
+	if GlacialSpike:Usable() and BrainFreeze:Up() and Target.timeToDie > (GlacialSpike:CastTime() + GlacialSpike:TravelTime()) then
+		return GlacialSpike
+	end
+	if FreezingWinds.known and Blizzard:Usable() and (not Target.boss or Target.timeToDie > 4) and (FrozenOrb:Cooldown() > (IcyVeins:Cooldown() + 4)) then
+		UseCooldown(Blizzard)
+	end
+	if Frostbolt:Usable() then
+		return Frostbolt
+	end
+end
+
+APL[SPEC.FROST].aoe = function(self)
+	if Freeze:Usable() and not Target:Frozen() then
+		if CometStorm.known and CometStorm:Cooldown() > 28 then
+			UseExtra(Freeze)
+		elseif GlacialSpike.known and SplittingIce.known and GlacialSpike:Casting() and BrainFreeze:Down() then
+			UseExtra(Freeze)
+		end
+	end
+--[[
+
+]]
+	if FrozenOrb:Usable() then
+		return FrozenOrb
+	end
+	if Blizzard:Usable() then
+		return Blizzard
+	end
+	if Flurry:Usable() and WintersChill:Down() and (Ebonbolt:Previous() or (BrainFreeze:Up() and FingersOfFrost:Down())) then
+		return Flurry
+	end
+	if IceNova:Usable() then
+		if Freeze:Usable() and not Target:Frozen() and (not CometStorm.known or CometStorm:Cooldown() > 25) then
+			UseExtra(Freeze)
+		end
+		return IceNova
+	end
+	if CometStorm:Usable() then
+		if Freeze:Usable() and not Target:Frozen() then
+			UseExtra(Freeze)
+		end
+		return CometStorm
+	end
+	if IceLance:Usable() and (FingersOfFrost:Up() or (Target:Frozen() and not IceLance:Previous()) or WintersChill:Remains() > IceLance:TravelTime()) then
+		return IceLance
+	end
+	if BurstOfCold.known and ConeOfCold:Usable() and BurstOfCold:Up() and (Target:Frozen() or BurstOfCold:Remains() < Player.gcd) then
+		UseCooldown(BurstOfCold)
+	end
+	if ShiftingPower:Usable() and not FrozenOrb:Ready(8) and (not FreezingWinds.known or FreezingWinds:Down()) then
+		UseCooldown(ShiftingPower)
+	end
+	if Ebonbolt:Usable() and Target.timeToDie > (Ebonbolt:CastTime() + Ebonbolt:TravelTime()) then
+		return Ebonbolt
+	end
+	if Frostbolt:Usable() then
+		return Frostbolt
 	end
 end
 
@@ -2653,6 +2879,10 @@ UI.anchor_points = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
 			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
 		},
+		[SPEC.FROST] = {
+			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+		},
 	},
 	kui = { -- Kui Nameplates
 		[SPEC.ARCANE] = {
@@ -2660,6 +2890,10 @@ UI.anchor_points = {
 			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
 		},
 		[SPEC.FIRE] = {
+			['above'] = { 'BOTTOM', 'TOP', 0, 24 },
+			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
+		},
+		[SPEC.FROST] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 24 },
 			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
 		},
@@ -2927,6 +3161,14 @@ CombatEvent.SWING_DAMAGE = function(event, srcGUID, dstGUID, amount, overkill, s
 		if Opt.auto_aoe then
 			AutoAoe:Add(srcGUID, true)
 		end
+	elseif srcGUID == Pet.guid then
+		if Opt.auto_aoe then
+			AutoAoe:Add(dstGUID, true)
+		end
+	elseif dstGUID == Pet.guid then
+		if Opt.auto_aoe then
+			AutoAoe:Add(srcGUID, true)
+		end
 	end
 end
 
@@ -2940,13 +3182,30 @@ CombatEvent.SWING_MISSED = function(event, srcGUID, dstGUID, missType, offHand, 
 		if Opt.auto_aoe then
 			AutoAoe:Add(srcGUID, true)
 		end
+	elseif srcGUID == Pet.guid then
+		if Opt.auto_aoe and not (missType == 'EVADE' or missType == 'IMMUNE') then
+			AutoAoe:Add(dstGUID, true)
+		end
+	elseif dstGUID == Pet.guid then
+		if Opt.auto_aoe then
+			AutoAoe:Add(srcGUID, true)
+		end
 	end
 end
 
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
-	if srcGUID ~= Player.guid then
+	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
 		return
 	end
+
+	if srcGUID == Pet.guid then
+		if Pet.stuck and (event == 'SPELL_CAST_SUCCESS' or event == 'SPELL_DAMAGE' or event == 'SWING_DAMAGE') then
+			Pet.stuck = false
+		elseif not Pet.stuck and event == 'SPELL_CAST_FAILED' and missType == 'No path available' then
+			Pet.stuck = true
+		end
+	end
+
 	local ability = spellId and Abilities.bySpellId[spellId]
 	if not ability then
 		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
@@ -2972,7 +3231,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			ability:RemoveAura(dstGUID)
 		end
 	end
-	if dstGUID == Player.guid then
+	if dstGUID == Player.guid or dstGUID == Pet.guid then
 		if event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 			ability.last_gained = Player.time
 		end
@@ -3015,6 +3274,10 @@ function Events:UNIT_HEALTH(unitId)
 		Player.health.current = UnitHealth('player')
 		Player.health.max = UnitHealthMax('player')
 		Player.health.pct = Player.health.current / Player.health.max * 100
+	elseif unitId == 'pet' then
+		Pet.health.current = UnitHealth('pet')
+		Pet.health.max = UnitHealthMax('pet')
+		Pet.health.pct = Pet.health.current / Pet.health.max * 100
 	end
 end
 
@@ -3053,6 +3316,13 @@ end
 Events.UNIT_SPELLCAST_CHANNEL_START = Events.UNIT_SPELLCAST_CHANNEL_UPDATE
 Events.UNIT_SPELLCAST_CHANNEL_STOP = Events.UNIT_SPELLCAST_CHANNEL_UPDATE
 
+function Events:UNIT_PET(unitId)
+	if unitId ~= 'player' then
+		return
+	end
+	Pet:Update()
+end
+
 function Events:PLAYER_REGEN_DISABLED()
 	Player:UpdateTime()
 	Player.combat_start = Player.time
@@ -3062,6 +3332,7 @@ function Events:PLAYER_REGEN_ENABLED()
 	Player:UpdateTime()
 	Player.combat_start = 0
 	Player.swing.last_taken = 0
+	Pet.stuck = false
 	Target.estimated_range = 30
 	wipe(Player.previous_gcd)
 	if Player.last_ability then
@@ -3161,6 +3432,16 @@ function Events:PLAYER_ENTERING_WORLD()
 	Player:Init()
 	Target:Update()
 	C_Timer.After(5, function() Events:PLAYER_EQUIPMENT_CHANGED() end)
+end
+
+function Events:UI_ERROR_MESSAGE(errorId)
+	if (
+	    errorId == 394 or -- pet is rooted
+	    errorId == 396 or -- target out of pet range
+	    errorId == 400    -- no pet path to target
+	) then
+		Pet.stuck = true
+	end
 end
 
 amagicPanel.button:SetScript('OnClick', function(self, button, down)
