@@ -1184,7 +1184,7 @@ local Ignite = Ability:Add(12846, false, true, 12654)
 Ignite.buff_duration = 9
 Ignite.tick_interval = 1
 Ignite:AutoAoe(false, 'apply')
-local ImprovedScorch = Ability:Add(383604, true, true, 383608)
+local ImprovedScorch = Ability:Add(383604, false, true, 383608)
 ImprovedScorch.buff_duration = 12
 local IncendiaryEruptions = Ability:Add(383665, false, true)
 local Kindling = Ability:Add(155148, false, true)
@@ -2051,6 +2051,21 @@ function CharringEmbers:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function ImprovedScorch:Remains()
+	if SearingTouch:Up() and Scorch:Casting() then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
+function ImprovedScorch:Stack()
+	local stack = Ability.Stack(self)
+	if SearingTouch:Up() and Scorch:Casting() then
+		stack = stack + 1
+	end
+	return clamp(stack, 0, 3)
 end
 
 function Blizzard:CastSuccess(...)
