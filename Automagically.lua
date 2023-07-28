@@ -2339,7 +2339,7 @@ APL[SPEC.FIRE].skb = function(self)
 	if FuryOfTheSunKing:Down() then
 		return
 	end
-	if CharringEmbers.known and PhoenixFlames:Usable() and PhoenixFlames:Traveling() == 0 and CharringEmbers:Remains() < (Pyroblast:CastTime() + Pyroblast:TravelTime()) then
+	if CharringEmbers.known and PhoenixFlames:Usable() and CharringEmbers:Remains() < (Pyroblast:CastTime() + Pyroblast:TravelTime()) then
 		return PhoenixFlames
 	end
 	if Flamestrike:Usable() and FuryOfTheSunKing:Remains() > Flamestrike:CastTime() and Player.enemies >= self.skb_flamestrike then
@@ -2391,7 +2391,7 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 	if (Target.boss and Target.timeToDie < 20) or (Combustion:Remains() > self.skb_duration) then
 		self:combustion_cooldowns()
 	end
-	if CharringEmbers.known and PhoenixFlames:Usable() and PhoenixFlames:Traveling() == 0 and CharringEmbers:Remains() < ((HotStreak:Up() and 1 or 2) * Player.gcd) then
+	if CharringEmbers.known and PhoenixFlames:Usable() and CharringEmbers:Remains() < ((HotStreak:Up() and 1 or 2) * Player.gcd) then
 		return PhoenixFlames
 	end
 	if not self.combustion_in_cast then
