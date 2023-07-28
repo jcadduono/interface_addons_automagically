@@ -2026,19 +2026,19 @@ function Flamestrike:Free()
 	return HotStreak:Up()
 end
 
-function Combustion:Remains()
-	local remains = Ability.Remains(self)
-	if SunKingsBlessing.known and Ability.Remains(FuryOfTheSunKing) > 0 and (Pyroblast:Casting() or Flamestrike:Casting()) then
+function Combustion:Remains(offGCD)
+	local remains = Ability.Remains(self, offGCD)
+	if not offGCD and SunKingsBlessing.known and FuryOfTheSunKing:Up(offGCD) and (Pyroblast:Casting() or Flamestrike:Casting()) then
 		remains = remains + 6
 	end
 	return remains
 end
 
-function FuryOfTheSunKing:Remains()
-	if Pyroblast:Casting() or Flamestrike:Casting() then
+function FuryOfTheSunKing:Remains(offGCD)
+	if not offGCD and (Pyroblast:Casting() or Flamestrike:Casting()) then
 		return 0
 	end
-	return Ability.Remains(self)
+	return Ability.Remains(self, offGCD)
 end
 
 function Meteor:LandingIn(seconds)
@@ -2311,7 +2311,7 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Fireball:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
 	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains())
-	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down() and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
+	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down(true) and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
 end
 
 APL[SPEC.FIRE].active_talents = function(self)
@@ -2332,6 +2332,21 @@ actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combus
 	end
 	if AlexstraszasFury.known and DragonsBreath:Usable() and Target.estimated_range < 15 and Combustion:Down() and HotStreak:Down() and (FeelTheBurn:Up() or Player:TimeInCombat() > 15) and (TemperedFlames.known or (not TemperedFlames.known and Firestarter:Down())) then
 		return UseCooldown(DragonsBreath)
+	end
+end
+
+APL[SPEC.FIRE].skb = function(self)
+	if FuryOfTheSunKing:Down() then
+		return
+	end
+	if CharringEmbers.known and PhoenixFlames:Usable() and PhoenixFlames:Traveling() == 0 and CharringEmbers:Remains() < (Pyroblast:CastTime() + Pyroblast:TravelTime()) then
+		return PhoenixFlames
+	end
+	if Flamestrike:Usable() and FuryOfTheSunKing:Remains() > Flamestrike:CastTime() and Player.enemies >= self.skb_flamestrike then
+		return Flamestrike
+	end
+	if Pyroblast:Usable() and FuryOfTheSunKing:Remains() > Pyroblast:CastTime() then
+		return Pyroblast
 	end
 end
 
@@ -2384,13 +2399,9 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 		if apl then return apl end
 	end
 	if self.use_cds and Combustion:Down() then
-		if SunKingsBlessing.known and FuryOfTheSunKing:Up() then
-			if Flamestrike:Usable() and FuryOfTheSunKing:Remains() > Flamestrike:CastTime() and Combustion:Ready(Flamestrike:CastTime()) and Player.enemies >= self.skb_flamestrike then
-				return Flamestrike
-			end
-			if Pyroblast:Usable() and FuryOfTheSunKing:Remains() > Pyroblast:CastTime() then
-				return Pyroblast
-			end
+		if SunKingsBlessing.known then
+			local apl = self:skb()
+			if apl then return apl end
 		end
 		if Fireball:Usable() and Combustion:Ready(Fireball:CastTime()) and Player.enemies < 2 then
 			return Fireball
@@ -2414,16 +2425,9 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 	if self.use_cds and ShiftingPower:Usable() and Combustion:Up() and Player.enemies >= self.combustion_shifting_power and FireBlast:Charges() == 0 and (AlexstraszasFury.known or PhoenixFlames:Charges() < 3) then
 		UseCooldown(ShiftingPower)
 	end
-	if SunKingsBlessing.known and FuryOfTheSunKing:Up() then
-		if CharringEmbers.known and PhoenixFlames:Usable() and PhoenixFlames:Traveling() == 0 and CharringEmbers:Remains() < (Pyroblast:CastTime() + Pyroblast:TravelTime()) then
-			return PhoenixFlames
-		end
-		if Flamestrike:Usable() and FuryOfTheSunKing:Remains() > Flamestrike:CastTime() and Player.enemies >= self.skb_flamestrike then
-			return Flamestrike
-		end
-		if Pyroblast:Usable() and FuryOfTheSunKing:Remains() > Pyroblast:CastTime() then
-			return Pyroblast
-		end
+	if SunKingsBlessing.known then
+		local apl = self:skb()
+		if apl then return apl end
 	end
 	if ImprovedScorch.known and Scorch:Usable() and SearingTouch:Up() and ImprovedScorch:Stack() < 3 then
 		return Scorch
@@ -2504,13 +2508,9 @@ actions.standard_rotation+=/fireball
 	if Pyroblast:Usable() and (Hyperthermia:Up() or HotStreak:Up()) then
 		return Pyroblast
 	end
-	if SunKingsBlessing.known and FuryOfTheSunKing:Up() then
-		if Flamestrike:Usable() and Player.enemies >= self.skb_flamestrike then
-			return Flamestrike
-		end
-		if Pyroblast:Usable()  then
-			return Pyroblast
-		end
+	if SunKingsBlessing.known then
+		local apl = self:skb()
+		if apl then return apl end
 	end
 	if FireBlast:Usable() and Firestarter:Down() and not self.fire_blast_pooling and (not FuryOfTheSunKing.known or FuryOfTheSunKing:Down()) and (
 		(HeatingUp:Up() and (Fireball:Casting() or Pyroblast:Casting()) and (Player.cast.remains < 0.5 or not Hyperthermia.known)) or
