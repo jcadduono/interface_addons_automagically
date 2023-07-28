@@ -2028,7 +2028,7 @@ end
 
 function Combustion:Remains(offGCD)
 	local remains = Ability.Remains(self, offGCD)
-	if not offGCD and SunKingsBlessing.known and FuryOfTheSunKing:Up(offGCD) and (Pyroblast:Casting() or Flamestrike:Casting()) then
+	if not offGCD and SunKingsBlessing.known and Ability.Remains(FuryOfTheSunKing) > 0 and (Pyroblast:Casting() or Flamestrike:Casting()) then
 		remains = remains + 6
 	end
 	return remains
@@ -2310,7 +2310,7 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 	self.use_cds = (Target.boss and Player.group_size >= 10) or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or Combustion:Remains() > self.skb_duration
 	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Fireball:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
-	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains())
+	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains(true))
 	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down(true) and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
 end
 
