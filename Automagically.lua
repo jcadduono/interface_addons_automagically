@@ -608,7 +608,7 @@ function Ability:Usable(seconds, pool)
 	return self:Ready(seconds)
 end
 
-function Ability:Remains()
+function Ability:Remains(offGCD)
 	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
@@ -621,7 +621,7 @@ function Ability:Remains()
 			if expires == 0 then
 				return 600 -- infinite duration
 			end
-			return max(0, expires - Player.ctime - (self.off_gcd and 0 or Player.execute_remains))
+			return max(0, expires - Player.ctime - (offGCD and 0 or Player.execute_remains))
 		end
 	end
 	return 0
@@ -2127,13 +2127,35 @@ APL[SPEC.ARCANE].Main = function(self)
 end
 
 APL[SPEC.FIRE].Main = function(self)
+	self:spells_in_flight()
 	self:combustion_timing()
 	if Player:TimeInCombat() == 0 then
+--[[
+actions.precombat=flask
+actions.precombat+=/food
+actions.precombat+=/augmentation
+actions.precombat+=/arcane_intellect
+actions.precombat+=/snapshot_stats
+actions.precombat+=/mirror_image
+actions.precombat+=/flamestrike,if=active_enemies>=variable.hot_streak_flamestrike
+actions.precombat+=/pyroblast
+]]
 		if Opt.barrier and BlazingBarrier:Usable() and BlazingBarrier:Remains() < 15 then
 			UseCooldown(BlazingBarrier)
 		end
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 300 then
 			return ArcaneIntellect
+		end
+		if Target.boss then
+			if MirrorImage:Usable() then
+				UseCooldown(MirrorImage)
+			end
+			if Flamestrike:Usable() and Player.enemies >= self.hot_streak_flamestrike then
+				return Flamestrike
+			end
+			if Pyroblast:Usable() then
+				return Pyroblast
+			end
 		end
 	else
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 10 then
@@ -2169,15 +2191,6 @@ actions+=/scorch
 ]]
 	if self.use_cds and TemporalWarp.known and TimeWarp:Usable() and Player:Exhausted() then
 		UseCooldown(TimeWarp)
-	end
-	self.hot_streak_spells_in_flight = 0
-	if PhoenixFlames.known and AlexstraszasFury.known then
-		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + PhoenixFlames:Traveling()
-	end
-	if Combustion:Up() or (Firestarter.known and Firestarter:Up()) then
-		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + ((Fireball:Casting() or Pyroblast:Casting()) and 1 or 0) + Fireball:Traveling(true) + Pyroblast:Traveling(true)
-	elseif Hyperthermia.known and Hyperthermia:Up() then
-		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + ((Pyroblast:Casting() and 1 or 0) + Pyroblast:Traveling(true))
 	end
 	self.shifting_power_before_combustion = self.time_to_combustion > ShiftingPower:Cooldown()
 	self.fire_blast_pooling = (
@@ -2251,12 +2264,28 @@ actions.precombat+=/variable,name=on_use_cutoff,value=20,if=variable.combustion_
 	self.skb_duration = 6
 end
 
+APL[SPEC.FIRE].spells_in_flight = function(self)
+	self.hot_streak_spells_in_flight_off_gcd = 0
+	self.hot_streak_spells_in_flight = 0
+	if PhoenixFlames.known and AlexstraszasFury.known then
+		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + PhoenixFlames:Traveling()
+	end
+	if Combustion:Up() or (Firestarter.known and Firestarter:Up()) then
+		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd  + Fireball:Traveling(true) + Pyroblast:Traveling(true)
+		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + ((Fireball:Casting() or Pyroblast:Casting()) and 1 or 0)
+	elseif Hyperthermia.known and Hyperthermia:Up() then
+		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + Pyroblast:Traveling(true)
+		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + (Pyroblast:Casting() and 1 or 0)
+	end
+	self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + self.hot_streak_spells_in_flight_off_gcd
+end
+
 APL[SPEC.FIRE].firestarter_fire_blasts = function(self)
 --[[
 actions.firestarter_fire_blasts=fire_blast,use_while_casting=1,if=!variable.fire_blast_pooling&!buff.hot_streak.react&(action.fireball.execute_remains>gcd.remains|action.pyroblast.executing)&buff.heating_up.react+hot_streak_spells_in_flight=1&(cooldown.shifting_power.ready|charges>1|buff.feel_the_burn.remains<2*gcd.max)
 actions.firestarter_fire_blasts+=/fire_blast,use_off_gcd=1,if=!variable.fire_blast_pooling&buff.heating_up.react+hot_streak_spells_in_flight=1&(talent.feel_the_burn&buff.feel_the_burn.remains<gcd.remains|cooldown.shifting_power.ready&(!set_bonus.tier30_2pc|debuff.charring_embers.remains>2*gcd.max))
 ]]
-	if FireBlast:Usable() and not self.fire_blast_pooling and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) == 1 and (
+	if FireBlast:Usable() and not self.fire_blast_pooling and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) == 1 and (
 		((Fireball:Casting() or Pyroblast:Casting()) and (ShiftingPower:Ready() or FireBlast:Charges() > 1 or FeelTheBurn:Remains() < (2 * Player.gcd))) or
 		(FeelTheBurn.known and FeelTheBurn:Remains() < Player.execute_remains) or
 		(ShiftingPower:Ready() and (not CharringEmbers.known or CharringEmbers:Remains() > (2 * Player.gcd)))
@@ -2282,7 +2311,7 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Fireball:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
 	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains())
-	self.combustion_in_cast = self.hot_streak_spells_in_flight == 0 and self.time_to_combustion <= 0 and Combustion:Down() and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
+	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down() and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
 end
 
 APL[SPEC.FIRE].active_talents = function(self)
@@ -2370,7 +2399,7 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 			return Scorch
 		end
 	end
-	if FireBlast:Usable() and not self.fire_blast_pooling and (SearingTouch:Down() or Scorch:Casting() or ImprovedScorch:Remains() > 3) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
+	if FireBlast:Usable() and not self.fire_blast_pooling and (SearingTouch:Down() or Scorch:Casting() or ImprovedScorch:Remains() > 3) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 then
 		UseExtra(FireBlast, true)
 	end
 	if Flamestrike:Usable() and Player.enemies >= self.combustion_flamestrike and (HotStreak:Up() or Hyperthermia:Up()) then
@@ -2485,7 +2514,7 @@ actions.standard_rotation+=/fireball
 	end
 	if FireBlast:Usable() and Firestarter:Down() and not self.fire_blast_pooling and (not FuryOfTheSunKing.known or FuryOfTheSunKing:Down()) and (
 		(HeatingUp:Up() and (Fireball:Casting() or Pyroblast:Casting()) and (Player.cast.remains < 0.5 or not Hyperthermia.known)) or
-		(SearingTouch:Up() and (not ImprovedScorch.known or ImprovedScorch:Stack() >= 3 or FireBlast:FullRechargeTime() < 3) and ((HeatingUp:Up() and not Scorch:Casting()) or (HotStreak:Down() and HeatingUp:Down() and Scorch:Casting() and self.hot_streak_spells_in_flight == 0)))
+		(SearingTouch:Up() and (not ImprovedScorch.known or ImprovedScorch:Stack() >= 3 or FireBlast:FullRechargeTime() < 3) and ((HeatingUp:Up() and not Scorch:Casting()) or (HotStreak:Down() and Scorch:Casting() and self.hot_streak_spells_in_flight_off_gcd == 0)))
 	) then
 		UseExtra(FireBlast, true)
 	end
