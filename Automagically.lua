@@ -1035,6 +1035,7 @@ FireBlast.triggers_gcd = false
 FireBlast.off_gcd = true
 local Frostbolt = Ability:Add(116, false, true, 228597)
 Frostbolt.mana_cost = 2
+Frostbolt.triggers_combat = true
 Frostbolt:SetVelocity(35)
 local FrostNova = Ability:Add(122, false, true)
 FrostNova.mana_cost = 2
@@ -1098,6 +1099,7 @@ ArcaneBarrage:AutoAoe()
 local ArcaneBlast = Ability:Add(30451, false, true)
 ArcaneBlast.mana_cost = 2.75
 ArcaneBlast.arcane_charge_gain = 1
+ArcaneBlast.triggers_combat = true
 local ArcaneFamiliar = Ability:Add(205022, true, true, 210126)
 ArcaneFamiliar.buff_duration = 3600
 ArcaneFamiliar.cooldown_duration = 10
@@ -1165,6 +1167,7 @@ local FeelTheBurn = Ability:Add(383391, true, true, 383395)
 FeelTheBurn.buff_duration = 5
 local Fireball = Ability:Add(133, false, true)
 Fireball.mana_cost = 2
+Fireball.triggers_combat = true
 Fireball:SetVelocity(45)
 local Firestarter = Ability:Add(205026, false, true)
 local FlameAccelerant = Ability:Add(203275, true, true, 203277)
@@ -1175,6 +1178,7 @@ FlamesFury.buff_duration = 30
 local Flamestrike = Ability:Add(2120, false, true)
 Flamestrike.mana_cost = 2.5
 Flamestrike.buff_duration = 8
+Flamestrike.triggers_combat = true
 Flamestrike:AutoAoe()
 local FuelTheFlames = Ability:Add(416094, false, true)
 local FuryOfTheSunKing = Ability:Add(383883, true, true)
@@ -1218,9 +1222,11 @@ PhoenixFlames:SetVelocity(50)
 PhoenixFlames:AutoAoe()
 local Pyroblast = Ability:Add(11366, false, true)
 Pyroblast.mana_cost = 2
+Pyroblast.triggers_combat = true
 Pyroblast:SetVelocity(35)
 local Scorch = Ability:Add(2948, false, true)
 Scorch.mana_cost = 1
+Scorch.triggers_combat = true
 local SearingTouch = Ability:Add(269644, false, true)
 local SunKingsBlessing = Ability:Add(383886, true, true, 383882)
 SunKingsBlessing.buff_duration = 30
@@ -1242,6 +1248,7 @@ Blizzard.tick_interval = 1
 Blizzard.hasted_cooldown = true
 Blizzard.hasted_duration = true
 Blizzard.hasted_ticks = true
+Blizzard.triggers_combat = true
 Blizzard:AutoAoe()
 local Chilled = Ability:Add(205708, false, true)
 Chilled.buff_duration = 15
@@ -1288,6 +1295,7 @@ CometStorm:AutoAoe()
 local Ebonbolt = Ability:Add(257537, false, true, 257538)
 Ebonbolt.mana_cost = 2
 Ebonbolt.cooldown_duration = 45
+Ebonbolt.triggers_combat = true
 Ebonbolt:SetVelocity(30)
 local FreezingRain = Ability:Add(270233, true, true, 270232)
 FreezingRain.buff_duration = 12
@@ -1295,6 +1303,7 @@ local FrozenTouch = Ability:Add(205030, false, true)
 local GlacialSpike = Ability:Add(199786, false, true, 228600)
 GlacialSpike.mana_cost = 1
 GlacialSpike.buff_duration = 4
+GlacialSpike.triggers_combat = true
 GlacialSpike:SetVelocity(40)
 local IceFloes = Ability:Add(108839, true, true)
 IceFloes.requires_charge = true
@@ -1479,7 +1488,8 @@ function Player:Exhausted()
 		if (
 			id == 57724 or -- Sated
 			id == 57723 or -- Exhaustion
-			id == 80354    -- Temporal Displacement
+			id == 80354 or -- Temporal Displacement
+			id == 264689   -- Fatigued
 		) then
 			return true
 		end
