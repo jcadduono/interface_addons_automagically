@@ -1486,10 +1486,11 @@ function Player:Exhausted()
 	for i = 1, 40 do
 		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HARMFUL')
 		if (
-			id == 57724 or -- Sated
-			id == 57723 or -- Exhaustion
-			id == 80354 or -- Temporal Displacement
-			id == 264689   -- Fatigued
+			id == 57724 or -- Sated (Alliance Shaman)
+			id == 57723 or -- Exhaustion (Horde Shaman)
+			id == 80354 or -- Temporal Displacement (Mage)
+			id == 264689 or-- Fatigued (Hunter)
+			id == 390435   -- Exhaustion (Evoker)
 		) then
 			return true
 		end
