@@ -1180,7 +1180,7 @@ Flamestrike.mana_cost = 2.5
 Flamestrike.buff_duration = 8
 Flamestrike.triggers_combat = true
 Flamestrike:AutoAoe()
-local FuelTheFlames = Ability:Add(416094, false, true)
+local FuelTheFire = Ability:Add(416094, false, true)
 local FuryOfTheSunKing = Ability:Add(383883, true, true)
 FuryOfTheSunKing.buff_duration = 30
 local Hyperthermia = Ability:Add(383860, true, true, 383874)
@@ -1830,6 +1830,7 @@ function Target:Update()
 		amagicPanel:Show()
 		return true
 	end
+	UI:Disappear()
 end
 
 function Target:TimeToPct(pct)
@@ -2009,7 +2010,7 @@ end
 function HeatingUp:Remains()
 	if (
 		(SearingTouch.known and Scorch:Casting() and SearingTouch:Up()) or
-		(Combustion.known and (Scorch:Casting() or (FuelTheFlames.known and Flamestrike:Casting())) and Combustion:Up())
+		(Combustion.known and (Scorch:Casting() or (FuelTheFire.known and Flamestrike:Casting())) and Combustion:Up())
 	) then
 		if Ability.Remains(self) > 0 or Ability.Remains(HotStreak) > 0 then
 			return 0
@@ -2022,7 +2023,7 @@ end
 function HotStreak:Remains()
 	if Ability.Remains(HeatingUp) > 0 and (
 		(SearingTouch.known and Scorch:Casting() and SearingTouch:Up()) or
-		(Combustion.known and (Scorch:Casting() or (FuelTheFlames.known and Flamestrike:Casting())) and Combustion:Up())
+		(Combustion.known and (Scorch:Casting() or (FuelTheFire.known and Flamestrike:Casting())) and Combustion:Up())
 	) then
 		return self:Duration()
 	end
@@ -2076,6 +2077,10 @@ function ImprovedScorch:Remains()
 		return self:Duration()
 	end
 	return Ability.Remains(self)
+end
+
+function ImprovedScorch:Active()
+	return self.known and SearingTouch:Up()
 end
 
 function ImprovedScorch:Stack()
@@ -2180,17 +2185,24 @@ actions.precombat+=/pyroblast
 --[[
 actions=counterspell
 actions+=/call_action_list,name=combustion_timing,if=!variable.disable_combustion
-actions+=/time_warp,if=talent.temporal_warp&(buff.exhaustion.up|interpolated_fight_remains<buff.bloodlust.duration)
+actions+=/time_warp,if=buff.exhaustion.up&talent.temporal_warp&(firestarter.active|interpolated_fight_remains<buff.bloodlust.duration)
 actions+=/potion,if=buff.potion.duration>variable.time_to_combustion+buff.combustion.duration
 actions+=/variable,name=shifting_power_before_combustion,value=variable.time_to_combustion>cooldown.shifting_power.remains
 actions+=/variable,name=item_cutoff_active,value=(variable.time_to_combustion<variable.on_use_cutoff|buff.combustion.remains>variable.skb_duration&!cooldown.item_cd_1141.remains)&((trinket.1.has_cooldown&trinket.1.cooldown.remains<variable.on_use_cutoff)+(trinket.2.has_cooldown&trinket.2.cooldown.remains<variable.on_use_cutoff)>1)
 actions+=/use_item,effect_name=gladiators_badge,if=variable.time_to_combustion>cooldown-5
-actions+=/use_item,name=moonlit_prism,if=variable.time_to_combustion<=5|fight_remains<variable.time_to_combustion
+actions+=/use_item,name=mirror_of_fractured_tomorrows,if=buff.combustion.up&buff.combustion.remains>11
+actions+=/use_item,name=timethiefs_gambit,if=buff.combustion.up
+actions+=/use_item,name=balefire_branch,if=(variable.time_to_combustion<=3&buff.fury_of_the_sun_king.up)|(buff.combustion.up&buff.combustion.remains>11)
+actions+=/use_item,name=ashes_of_the_embersoul,if=(variable.time_to_combustion<=3&buff.fury_of_the_sun_king.up)|(buff.combustion.up&buff.combustion.remains>11)
+actions+=/use_item,name=nymues_unraveling_spindle,if=variable.time_to_combustion<=9
+actions+=/use_item,name=dreambinder_loom_of_the_great_cycle
+actions+=/use_item,name=iridal_the_earths_master,use_off_gcd=1,slot=main_hand,if=gcd.remains>=0.6*gcd.max
+actions+=/use_item,name=belorrelos_the_suncaller,if=(!variable.steroid_trinket_equipped&buff.combustion.down)|(variable.steroid_trinket_equipped&trinket.1.has_cooldown&trinket.1.cooldown.remains>20&buff.combustion.down)|(variable.steroid_trinket_equipped&trinket.2.has_cooldown&trinket.2.cooldown.remains>20&buff.combustion.down)
 actions+=/use_items,if=!variable.item_cutoff_active
 actions+=/variable,use_off_gcd=1,use_while_casting=1,name=fire_blast_pooling,value=buff.combustion.down&action.fire_blast.charges_fractional+(variable.time_to_combustion+action.shifting_power.full_reduction*variable.shifting_power_before_combustion)%cooldown.fire_blast.duration-1<cooldown.fire_blast.max_charges+variable.overpool_fire_blasts%cooldown.fire_blast.duration-(buff.combustion.duration%cooldown.fire_blast.duration)%%1&variable.time_to_combustion<fight_remains
 actions+=/call_action_list,name=combustion_phase,if=variable.time_to_combustion<=0|buff.combustion.up|variable.time_to_combustion<variable.combustion_precast_time&cooldown.combustion.remains<variable.combustion_precast_time
 actions+=/variable,use_off_gcd=1,use_while_casting=1,name=fire_blast_pooling,value=searing_touch.active&action.fire_blast.full_recharge_time>3*gcd.max,if=!variable.fire_blast_pooling&talent.sun_kings_blessing
-actions+=/shifting_power,if=buff.combustion.down&(action.fire_blast.charges=0|variable.fire_blast_pooling)&!buff.hot_streak.react&variable.shifting_power_before_combustion
+actions+=/shifting_power,if=buff.combustion.down&(action.fire_blast.charges=0|variable.fire_blast_pooling)&(!improved_scorch.active|debuff.improved_scorch.remains>cast_time+action.scorch.cast_time&!buff.fury_of_the_sun_king.up)&!buff.hot_streak.react&variable.shifting_power_before_combustion
 actions+=/variable,name=phoenix_pooling,if=active_enemies<variable.combustion_flamestrike,value=(variable.time_to_combustion+buff.combustion.duration-5<action.phoenix_flames.full_recharge_time+cooldown.phoenix_flames.duration-action.shifting_power.full_reduction*variable.shifting_power_before_combustion&variable.time_to_combustion<fight_remains|talent.sun_kings_blessing)&!talent.alexstraszas_fury
 actions+=/variable,name=phoenix_pooling,if=active_enemies>=variable.combustion_flamestrike,value=(variable.time_to_combustion<action.phoenix_flames.full_recharge_time-action.shifting_power.full_reduction*variable.shifting_power_before_combustion&variable.time_to_combustion<fight_remains|talent.sun_kings_blessing)&!talent.alexstraszas_fury
 actions+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=!variable.fire_blast_pooling&variable.time_to_combustion>0&active_enemies>=variable.hard_cast_flamestrike&!firestarter.active&!buff.hot_streak.react&(buff.heating_up.react&action.flamestrike.execute_remains<0.5|charges_fractional>=2)
@@ -2213,7 +2225,7 @@ actions+=/scorch
 		apl = self:combustion_phase()
 		if apl then return apl end
 	end
-	if self.use_cds and ShiftingPower:Usable() and self.shifting_power_before_combustion and Combustion:Down() and (FireBlast:Charges() == 0 or self.fire_blast_pooling) and HotStreak:Down() then
+	if self.use_cds and ShiftingPower:Usable() and self.shifting_power_before_combustion and Combustion:Down() and HotStreak:Down() and (FireBlast:Charges() == 0 or self.fire_blast_pooling) and (not ImprovedScorch:Active() or ImprovedScorch:Remains() > ((4 * Player.haste_factor) + Scorch:CastTime()) and FuryOfTheSunKing:Down()) then
 		UseCooldown(ShiftingPower)
 	end
 	if Player.enemies < self.combustion_flamestrike then
@@ -2244,12 +2256,13 @@ end
 
 APL[SPEC.FIRE].precombat_variables = function(self)
 --[[
+actions.precombat+=/variable,name=steroid_trinket_equipped,op=set,value=equipped.gladiators_badge|equipped.irideus_fragment|equipped.erupting_spear_fragment|equipped.spoils_of_neltharus|equipped.tome_of_unstable_power|equipped.timebreaching_talon|equipped.horn_of_valor|equipped.mirror_of_fractured_tomorrows|equipped.ashes_of_the_embersoul|equipped.balefire_branch|equipped.time_theifs_gambit|equipped.nymues_unraveling_spindle
 actions.precombat+=/variable,name=disable_combustion,op=reset
 actions.precombat+=/variable,name=firestarter_combustion,default=-1,value=talent.sun_kings_blessing,if=variable.firestarter_combustion<0
-actions.precombat+=/variable,name=hot_streak_flamestrike,if=variable.hot_streak_flamestrike=0,value=3*talent.flame_patch+999*!talent.flame_patch
+actions.precombat+=/variable,name=hot_streak_flamestrike,if=variable.hot_streak_flamestrike=0,value=4*talent.flame_patch+999*!talent.flame_patch
 actions.precombat+=/variable,name=hard_cast_flamestrike,if=variable.hard_cast_flamestrike=0,value=999
-actions.precombat+=/variable,name=combustion_flamestrike,if=variable.combustion_flamestrike=0,value=3*talent.flame_patch+999*!talent.flame_patch
-actions.precombat+=/variable,name=skb_flamestrike,if=variable.skb_flamestrike=0,value=3
+actions.precombat+=/variable,name=combustion_flamestrike,if=variable.combustion_flamestrike=0,value=4*talent.flame_patch+999*!talent.flame_patch
+actions.precombat+=/variable,name=skb_flamestrike,if=variable.skb_flamestrike=0,value=3*talent.fuel_the_fire+999*!talent.fuel_the_fire
 actions.precombat+=/variable,name=arcane_explosion,if=variable.arcane_explosion=0,value=999
 actions.precombat+=/variable,name=arcane_explosion_mana,default=40,op=reset
 actions.precombat+=/variable,name=combustion_shifting_power,if=variable.combustion_shifting_power=0,value=999
@@ -2262,10 +2275,10 @@ actions.precombat+=/variable,name=on_use_cutoff,value=20,if=variable.combustion_
 ]]
 	self.disable_combustion = false
 	self.firestarter_combustion = SunKingsBlessing.known
-	self.hot_streak_flamestrike = FlamePatch.known and 3 or 999
+	self.hot_streak_flamestrike = FlamePatch.known and 4 or 999
 	self.hard_cast_flamestrike = 999
-	self.combustion_flamestrike = FlamePatch.known and 3 or 999
-	self.skb_flamestrike = 3
+	self.combustion_flamestrike = FlamePatch.known and 4 or 999
+	self.skb_flamestrike = FuelTheFire.known and 3 or 999
 	self.arcane_explosion = 999
 	self.arcane_explosion_mana = 40
 	self.combustion_shifting_power = 999
@@ -2329,8 +2342,8 @@ APL[SPEC.FIRE].active_talents = function(self)
 --[[
 actions.active_talents=living_bomb,if=active_enemies>1&buff.combustion.down&(variable.time_to_combustion>cooldown.living_bomb.duration|variable.time_to_combustion<=0)
 actions.active_talents+=/meteor,if=variable.time_to_combustion<=0|buff.combustion.remains>travel_time|!talent.sun_kings_blessing&(cooldown.meteor.duration<variable.time_to_combustion|fight_remains<variable.time_to_combustion)
-actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combustion.down&!buff.hot_streak.react)&(buff.feel_the_burn.up|time>15)&!firestarter.remains&!talent.tempered_flames
-actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combustion.down&!buff.hot_streak.react)&(buff.feel_the_burn.up|time>15)&talent.tempered_flames
+actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combustion.down&!buff.hot_streak.react)&(buff.feel_the_burn.up|time>15)&(!improved_scorch.active)&!firestarter.remains&!talent.tempered_flames
+actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combustion.down&!buff.hot_streak.react)&(buff.feel_the_burn.up|time>15)&(!improved_scorch.active)&talent.tempered_flames
 ]]
 	if LivingBomb:Usable() and Player.enemies > 1 and Combustion:Down() and (self.time_to_combustion <= 0 or self.time_to_combustion > LivingBomb:CooldownDuration()) then
 		return UseCooldown(LivingBomb)
@@ -2341,7 +2354,7 @@ actions.active_talents+=/dragons_breath,if=talent.alexstraszas_fury&(buff.combus
 	) then
 		return UseCooldown(Meteor)
 	end
-	if AlexstraszasFury.known and DragonsBreath:Usable() and Target.estimated_range < 15 and Combustion:Down() and HotStreak:Down() and (FeelTheBurn:Up() or Player:TimeInCombat() > 15) and (TemperedFlames.known or (not TemperedFlames.known and Firestarter:Down())) then
+	if AlexstraszasFury.known and DragonsBreath:Usable() and Target.estimated_range < 15 and Combustion:Down() and HotStreak:Down() and (FeelTheBurn:Up() or Player:TimeInCombat() > 15) and not ImprovedScorch:Active() and (TemperedFlames.known or (not TemperedFlames.known and Firestarter:Down())) then
 		return UseCooldown(DragonsBreath)
 	end
 end
@@ -2369,29 +2382,28 @@ actions.combustion_phase+=/living_bomb,if=active_enemies>1&buff.combustion.down
 actions.combustion_phase+=/call_action_list,name=combustion_cooldowns,if=buff.combustion.remains>variable.skb_duration|fight_remains<20
 actions.combustion_phase+=/use_item,name=hyperthread_wristwraps,if=hyperthread_wristwraps.fire_blast>=2&action.fire_blast.charges=0
 actions.combustion_phase+=/use_item,name=neural_synapse_enhancer,if=variable.time_to_combustion>60
-actions.combustion_phase+=/phoenix_flames,if=set_bonus.tier30_2pc&!action.phoenix_flames.in_flight&debuff.charring_embers.remains<2*gcd.max
+actions.combustion_phase+=/phoenix_flames,if=buff.combustion.down&set_bonus.tier30_2pc&!action.phoenix_flames.in_flight&debuff.charring_embers.remains<4*gcd.max&!buff.hot_streak.react
 actions.combustion_phase+=/call_action_list,name=active_talents
 actions.combustion_phase+=/flamestrike,if=buff.combustion.down&buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&buff.fury_of_the_sun_king.expiration_delay_remains=0&cooldown.combustion.remains<cast_time&active_enemies>=variable.skb_flamestrike
 actions.combustion_phase+=/pyroblast,if=buff.combustion.down&buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&buff.fury_of_the_sun_king.expiration_delay_remains=0
-actions.combustion_phase+=/fireball,if=buff.combustion.down&cooldown.combustion.remains<cast_time&active_enemies<2
+actions.combustion_phase+=/fireball,if=buff.combustion.down&cooldown.combustion.remains<cast_time&active_enemies<2&!improved_scorch.active
 actions.combustion_phase+=/scorch,if=buff.combustion.down&cooldown.combustion.remains<cast_time
 actions.combustion_phase+=/combustion,use_off_gcd=1,use_while_casting=1,if=hot_streak_spells_in_flight=0&buff.combustion.down&variable.time_to_combustion<=0&(action.scorch.executing&action.scorch.execute_remains<variable.combustion_cast_remains|action.fireball.executing&action.fireball.execute_remains<variable.combustion_cast_remains|action.pyroblast.executing&action.pyroblast.execute_remains<variable.combustion_cast_remains|action.flamestrike.executing&action.flamestrike.execute_remains<variable.combustion_cast_remains|action.meteor.in_flight&action.meteor.in_flight_remains<variable.combustion_cast_remains)
-actions.combustion_phase+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=!variable.fire_blast_pooling&(!improved_scorch.active|action.scorch.executing|debuff.improved_scorch.remains>3)&(buff.fury_of_the_sun_king.down|action.pyroblast.executing)&buff.combustion.up&!buff.hyperthermia.react&!buff.hot_streak.react&hot_streak_spells_in_flight+buff.heating_up.react*(gcd.remains>0)<2
+actions.combustion_phase+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=!variable.fire_blast_pooling&(!improved_scorch.active|action.scorch.executing|debuff.improved_scorch.remains>4*gcd.max)&(buff.fury_of_the_sun_king.down|action.pyroblast.executing)&buff.combustion.up&!buff.hyperthermia.react&!buff.hot_streak.react&hot_streak_spells_in_flight+buff.heating_up.react*(gcd.remains>0)<2
 actions.combustion_phase+=/flamestrike,if=(buff.hot_streak.react&active_enemies>=variable.combustion_flamestrike)|(buff.hyperthermia.react&active_enemies>=variable.combustion_flamestrike-talent.hyperthermia)
 actions.combustion_phase+=/pyroblast,if=buff.hyperthermia.react
-actions.combustion_phase+=/pyroblast,if=buff.hot_streak.react
+actions.combustion_phase+=/pyroblast,if=buff.hot_streak.react&buff.combustion.up
 actions.combustion_phase+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.react&active_enemies<variable.combustion_flamestrike&buff.combustion.up
-actions.combustion_phase+=/shifting_power,if=buff.combustion.up&!action.fire_blast.charges&(action.phoenix_flames.charges<action.phoenix_flames.max_charges|talent.alexstraszas_fury)&active_enemies>=variable.combustion_shifting_power
+actions.combustion_phase+=/shifting_power,if=buff.combustion.up&!action.fire_blast.charges&(action.phoenix_flames.charges<action.phoenix_flames.max_charges|talent.alexstraszas_fury)&variable.combustion_shifting_power<=active_enemies
 actions.combustion_phase+=/flamestrike,if=buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&active_enemies>=variable.skb_flamestrike&buff.fury_of_the_sun_king.expiration_delay_remains=0
 actions.combustion_phase+=/pyroblast,if=buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&buff.fury_of_the_sun_king.expiration_delay_remains=0
-actions.combustion_phase+=/scorch,if=improved_scorch.active&debuff.improved_scorch.remains<3
-actions.combustion_phase+=/phoenix_flames,if=set_bonus.tier30_2pc&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2&(debuff.charring_embers.remains<2*gcd.max|buff.flames_fury.up)
+actions.combustion_phase+=/scorch,if=improved_scorch.active&(debuff.improved_scorch.remains<4*gcd.max)&active_enemies<variable.combustion_flamestrike
+actions.combustion_phase+=/phoenix_flames,if=set_bonus.tier30_2pc&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2&(debuff.charring_embers.remains<4*gcd.max|buff.flames_fury.stack>1|buff.flames_fury.up)
 actions.combustion_phase+=/fireball,if=buff.combustion.remains>cast_time&buff.flame_accelerant.react
 actions.combustion_phase+=/phoenix_flames,if=!set_bonus.tier30_2pc&!talent.alexstraszas_fury&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2
 actions.combustion_phase+=/scorch,if=buff.combustion.remains>cast_time&cast_time>=gcd.max
 actions.combustion_phase+=/fireball,if=buff.combustion.remains>cast_time
 actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active_enemies>1
-actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 ]]
 	if Combustion:Usable() and self.combustion_in_cast and ((Player.cast.remains < self.combustion_cast_remains and (Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting())) or Meteor:LandingIn(self.combustion_cast_remains)) then
 		UseCooldown(Combustion)
@@ -2414,14 +2426,14 @@ actions.combustion_phase+=/ice_nova,if=buff.combustion.remains<gcd.max
 			local apl = self:skb()
 			if apl then return apl end
 		end
-		if Fireball:Usable() and Combustion:Ready(Fireball:CastTime()) and Player.enemies < 2 then
+		if Fireball:Usable() and Combustion:Ready(Fireball:CastTime()) and Player.enemies < 2 and not ImprovedScorch:Active() then
 			return Fireball
 		end
 		if Scorch:Usable() and Combustion:Ready(Scorch:CastTime()) then
 			return Scorch
 		end
 	end
-	if FireBlast:Usable() and not self.fire_blast_pooling and (SearingTouch:Down() or Scorch:Casting() or ImprovedScorch:Remains() > 3) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 then
+	if FireBlast:Usable() and not self.fire_blast_pooling and (not ImprovedScorch:Active() or Scorch:Casting() or ImprovedScorch:Remains() > (4 * Player.gcd)) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 then
 		UseExtra(FireBlast, true)
 	end
 	if Flamestrike:Usable() and Player.enemies >= self.combustion_flamestrike and (HotStreak:Up() or Hyperthermia:Up()) then
@@ -2483,6 +2495,10 @@ actions.combustion_cooldowns+=/use_item,name=tome_of_unstable_power
 actions.combustion_cooldowns+=/use_item,name=timebreaching_talon
 actions.combustion_cooldowns+=/use_item,name=voidmenders_shadowgem
 actions.combustion_cooldowns+=/use_item,name=horn_of_valor
+actions.combustion_cooldowns+=/use_item,name=timethiefs_gambit
+actions.combustion_cooldowns+=/use_item,name=balefire_branch
+actions.combustion_cooldowns+=/use_item,name=ashes_of_the_embersoul
+actions.combustion_cooldowns+=/use_item,name=mirror_of_fractured_tomorrows
 ]]
 	if Opt.trinket then
 		if Trinket1:Usable() then
@@ -2496,17 +2512,23 @@ end
 APL[SPEC.FIRE].standard_rotation = function(self)
 --[[
 actions.standard_rotation=flamestrike,if=active_enemies>=variable.hot_streak_flamestrike&(buff.hot_streak.react|buff.hyperthermia.react)
-actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react|buff.hyperthermia.react
+actions.standard_rotation+=/pyroblast,if=buff.hyperthermia.react
+actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&(buff.hot_streak.remains<action.fireball.execute_time)
+actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&(hot_streak_spells_in_flight|firestarter.active|talent.alexstraszas_fury&action.phoenix_flames.charges)
+actions.standard_rotation+=/pyroblast,if=buff.hot_streak.react&searing_touch.active
 actions.standard_rotation+=/flamestrike,if=active_enemies>=variable.skb_flamestrike&buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.expiration_delay_remains=0
+actions.standard_rotation+=/scorch,if=improved_scorch.active&debuff.improved_scorch.remains<action.pyroblast.cast_time+5*gcd.max&buff.fury_of_the_sun_king.up&!action.scorch.in_flight
 actions.standard_rotation+=/pyroblast,if=buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.expiration_delay_remains=0
 actions.standard_rotation+=/fire_blast,use_off_gcd=1,use_while_casting=1,if=!firestarter.active&!variable.fire_blast_pooling&buff.fury_of_the_sun_king.down&(((action.fireball.executing&(action.fireball.execute_remains<0.5|!talent.hyperthermia)|action.pyroblast.executing&(action.pyroblast.execute_remains<0.5|!talent.hyperthermia))&buff.heating_up.react)|(searing_touch.active&(!improved_scorch.active|debuff.improved_scorch.stack=debuff.improved_scorch.max_stack|full_recharge_time<3)&(buff.heating_up.react&!action.scorch.executing|!buff.hot_streak.react&!buff.heating_up.react&action.scorch.executing&!hot_streak_spells_in_flight)))
 actions.standard_rotation+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.react&searing_touch.active&active_enemies<variable.hot_streak_flamestrike
-actions.standard_rotation+=/phoenix_flames,if=set_bonus.tier30_2pc&debuff.charring_embers.remains<2*gcd.max
+actions.standard_rotation+=/scorch,if=improved_scorch.active&debuff.improved_scorch.remains<4*gcd.max
+actions.standard_rotation+=/phoenix_flames,if=talent.alexstraszas_fury&(!talent.feel_the_burn|buff.feel_the_burn.remains<2*gcd.max)
+actions.standard_rotation+=/phoenix_flames,if=set_bonus.tier30_2pc&debuff.charring_embers.remains<2*gcd.max&!buff.hot_streak.react
 actions.standard_rotation+=/scorch,if=improved_scorch.active&debuff.improved_scorch.stack<debuff.improved_scorch.max_stack
 actions.standard_rotation+=/phoenix_flames,if=!talent.alexstraszas_fury&!buff.hot_streak.react&!variable.phoenix_pooling&buff.flames_fury.up
-actions.standard_rotation+=/phoenix_flames,if=talent.alexstraszas_fury&!buff.hot_streak.react&hot_streak_spells_in_flight=0&(!variable.phoenix_pooling&buff.flames_fury.up|charges_fractional>2.5|charges_fractional>1.5&buff.feel_the_burn.remains<2*gcd.max)
+actions.standard_rotation+=/phoenix_flames,if=talent.alexstraszas_fury&!buff.hot_streak.react&hot_streak_spells_in_flight=0&(!variable.phoenix_pooling&buff.flames_fury.up|charges_fractional>2.5|charges_fractional>1.5&(!talent.feel_the_burn|buff.feel_the_burn.remains<3*gcd.max))
 actions.standard_rotation+=/call_action_list,name=active_talents
-actions.standard_rotation+=/dragons_breath,if=active_enemies>1
+actions.standard_rotation+=/dragons_breath,if=active_enemies>1&talent.alexstraszas_fury
 actions.standard_rotation+=/scorch,if=searing_touch.active
 actions.standard_rotation+=/arcane_explosion,if=active_enemies>=variable.arcane_explosion&mana.pct>=variable.arcane_explosion_mana
 actions.standard_rotation+=/flamestrike,if=active_enemies>=variable.hard_cast_flamestrike
@@ -2516,7 +2538,17 @@ actions.standard_rotation+=/fireball
 	if Flamestrike:Usable() and Player.enemies >= self.hot_streak_flamestrike and (HotStreak:Up() or Hyperthermia:Up()) then
 		return Flamestrike
 	end
-	if Pyroblast:Usable() and (Hyperthermia:Up() or HotStreak:Up()) then
+	if Pyroblast:Usable() and (
+		Hyperthermia:Up() or
+		HotStreak:Up() and (
+			SearingTouch:Up() or
+			HotStreak:Remains() < Fireball:CastTime() or
+			self.hot_streak_spells_in_flight > 0 or
+			Firestarter:Up() or
+			(AlexstraszasFury.known and PhoenixFlames:Charges() > 0) or
+			true
+		)
+	) then
 		return Pyroblast
 	end
 	if SunKingsBlessing.known then
@@ -2532,10 +2564,16 @@ actions.standard_rotation+=/fireball
 	if Pyroblast:Usable() and HotStreak:Up() and SearingTouch:Up() and Player.enemies < self.hot_streak_flamestrike then
 		return Pyroblast
 	end
-	if PhoenixFlames:Usable() and Player.set_bonus.t30 >= 2 and CharringEmbers:Remains() < (2 * Player.gcd) then
+	if ImprovedScorch.known and Scorch:Usable() and SearingTouch:Up() and ImprovedScorch:Remains() < (4 * Player.gcd) and Target.timeToDie > (4 + ImprovedScorch:Remains()) then
+		return Scorch
+	end
+	if PhoenixFlames:Usable() and (
+		(Player.set_bonus.t30 >= 2 and CharringEmbers:Remains() < (2 * Player.gcd) and HotStreak:Down()) or
+		(AlexstraszasFury.known and (not FeelTheBurn.known or FeelTheBurn:Remains() < (2 * Player.gcd)))
+	) then
 		return PhoenixFlames
 	end
-	if ImprovedScorch.known and Scorch:Usable() and SearingTouch:Up() and ImprovedScorch:Stack() < 3 then
+	if ImprovedScorch.known and Scorch:Usable() and SearingTouch:Up() and ImprovedScorch:Stack() < 3 and Target.timeToDie > (4 + ImprovedScorch:Remains()) then
 		return Scorch
 	end
 	if PhoenixFlames:Usable() and HotStreak:Down() and (
@@ -2543,14 +2581,14 @@ actions.standard_rotation+=/fireball
 		(AlexstraszasFury.known and self.hot_streak_spells_in_flight == 0 and (
 			(not self.phoenix_pooling and FlamesFury:Up()) or
 			PhoenixFlames:ChargesFractional() > 2.5 or
-			PhoenixFlames:ChargesFractional() > 1.5 and FeelTheBurn:Remains() < (2 * Player.gcd)
+			PhoenixFlames:ChargesFractional() > 1.5 and (not FeelTheBurn.known or FeelTheBurn:Remains() < (2 * Player.gcd))
 		))
 	) then
 		return PhoenixFlames
 	end
 	local apl = self:active_talents()
 	if apl then return apl end
-	if DragonsBreath:Usable() and Player.enemies > 1 and Target.estimated_range < 15 then
+	if AlexstraszasFury.known and DragonsBreath:Usable() and Player.enemies > 1 and Target.estimated_range < 15 then
 		UseCooldown(DragonsBreath)
 	end
 	if Scorch:Usable() and SearingTouch:Up() then
