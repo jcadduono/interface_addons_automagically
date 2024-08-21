@@ -1,22 +1,42 @@
 local ADDON = 'Automagically'
+local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
+
+BINDING_CATEGORY_AUTOMAGICALLY = ADDON
+BINDING_NAME_AUTOMAGICALLY_TARGETMORE = "Toggle Targets +"
+BINDING_NAME_AUTOMAGICALLY_TARGETLESS = "Toggle Targets -"
+BINDING_NAME_AUTOMAGICALLY_TARGET1 = "Set Targets to 1"
+BINDING_NAME_AUTOMAGICALLY_TARGET2 = "Set Targets to 2"
+BINDING_NAME_AUTOMAGICALLY_TARGET3 = "Set Targets to 3"
+BINDING_NAME_AUTOMAGICALLY_TARGET4 = "Set Targets to 4"
+BINDING_NAME_AUTOMAGICALLY_TARGET5 = "Set Targets to 5+"
+
+local function log(...)
+	print(ADDON, '-', ...)
+end
+
 if select(2, UnitClass('player')) ~= 'MAGE' then
-	DisableAddOn(ADDON)
+	log('[|cFFFF0000Error|r]', 'Not loading because you are not the correct class! Consider disabling', ADDON, 'for this character.')
 	return
 end
-local ADDON_PATH = 'Interface\\AddOns\\' .. ADDON .. '\\'
 
 -- reference heavily accessed global functions from local scope for performance
 local min = math.min
 local max = math.max
 local floor = math.floor
 local GetPowerRegenForPowerType = _G.GetPowerRegenForPowerType
-local GetSpellCharges = _G.GetSpellCharges
-local GetSpellCooldown = _G.GetSpellCooldown
-local GetSpellInfo = _G.GetSpellInfo
+local GetSpellCharges = C_Spell.GetSpellCharges
+local GetSpellCooldown = C_Spell.GetSpellCooldown
+local GetSpellInfo = C_Spell.GetSpellInfo
+local GetItemCount = C_Item.GetItemCount
+local GetItemCooldown = C_Item.GetItemCooldown
+local GetInventoryItemCooldown = _G.GetInventoryItemCooldown
+local GetItemInfo = C_Item.GetItemInfo
 local GetTime = _G.GetTime
 local GetUnitSpeed = _G.GetUnitSpeed
+local IsSpellUsable = C_Spell.IsSpellUsable
+local IsItemUsable = C_Item.IsUsableItem
 local UnitAttackSpeed = _G.UnitAttackSpeed
-local UnitAura = _G.UnitAura
+local UnitAura = C_UnitAuras.GetAuraDataByIndex
 local UnitCastingInfo = _G.UnitCastingInfo
 local UnitChannelInfo = _G.UnitChannelInfo
 local UnitDetailedThreatSituation = _G.UnitDetailedThreatSituation
@@ -42,13 +62,17 @@ local function startsWith(str, start) -- case insensitive check to see if a stri
 	end
 	return string.lower(str:sub(1, start:len())) == start:lower()
 end
+
+local function ToUID(guid)
+	local uid = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
+	return uid and tonumber(uid)
+end
 -- end useful functions
 
 Automagically = {}
 local Opt -- use this as a local table reference to Automagically
 
 SLASH_Automagically1, SLASH_Automagically2, SLASH_Automagically3 = '/am', '/amagic', '/automagically'
-BINDING_HEADER_AUTOMAGICALLY = ADDON
 
 local function InitOpts()
 	local function SetDefaults(t, ref)
@@ -139,6 +163,17 @@ local Abilities = {
 	trackAuras = {},
 }
 
+-- summoned pet template
+local SummonedPet = {}
+SummonedPet.__index = SummonedPet
+
+-- classified summoned pets
+local SummonedPets = {
+	all = {},
+	known = {},
+	byUnitId = {},
+}
+
 -- methods for target tracking / aoe modes
 local AutoAoe = {
 	targets = {},
@@ -184,15 +219,17 @@ local Player = {
 	execute_remains = 0,
 	haste_factor = 1,
 	moving = false,
+	movement_speed = 100,
 	health = {
 		current = 0,
 		max = 100,
 		pct = 100,
 	},
 	mana = {
+		base = 0,
 		current = 0,
-		deficit = 0,
 		max = 100,
+		pct = 100,
 		regen = 0,
 	},
 	arcane_charges = {
@@ -228,6 +265,9 @@ local Player = {
 	set_bonus = {
 		t29 = 0, -- Bindings of the Crystal Scholar
 		t30 = 0, -- Underlight Conjurer's Brilliance
+		t31 = 0, -- Wayward Chronomancer's Clockwork
+		t32 = 0, -- Wayward Chronomancer's Clockwork (Awakened)
+		t33 = 0, -- Sparks of Violet Rebirth
 	},
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
@@ -238,6 +278,24 @@ local Player = {
 	},
 	main_freecast = false,
 	major_cd_remains = 0,
+}
+
+-- base mana pool max for each level
+Player.BaseMana = {
+	260,	270,	285,	300,	310,	--  5
+	330,	345,	360,	380,	400,	-- 10
+	430,	465,	505,	550,	595,	-- 15
+	645,	700,	760,	825,	890,	-- 20
+	965,	1050,	1135,	1230,	1335,	-- 25
+	1445,	1570,	1700,	1845,	2000,	-- 30
+	2165,	2345,	2545,	2755,	2990,	-- 35
+	3240,	3510,	3805,	4125,	4470,	-- 40
+	4845,	5250,	5690,	6170,	6685,	-- 45
+	7245,	7855,	8510,	9225,	10000,	-- 50
+	11745,	13795,	16205,	19035,	22360,	-- 55
+	26265,	30850,	36235,	42565,	50000,	-- 60
+	58730,	68985,	81030,	95180,	111800,	-- 65
+	131325,	154255,	181190,	212830,	250000,	-- 70
 }
 
 -- current pet information
@@ -259,7 +317,7 @@ local Pet = {
 -- current target information
 local Target = {
 	boss = false,
-	guid = 0,
+	dummy = false,
 	health = {
 		current = 0,
 		loss_per_sec = 0,
@@ -269,6 +327,18 @@ local Target = {
 	},
 	hostile = false,
 	estimated_range = 30,
+}
+
+-- target dummy unit IDs (count these units as bosses)
+Target.Dummies = {
+	[189617] = true,
+	[189632] = true,
+	[194643] = true,
+	[194644] = true,
+	[194648] = true,
+	[194649] = true,
+	[197833] = true,
+	[198594] = true,
 }
 
 -- Start AoE
@@ -342,8 +412,8 @@ function AutoAoe:Add(guid, update)
 	if self.blacklist[guid] then
 		return
 	end
-	local unitId = guid:match('^%w+-%d+-%d+-%d+-%d+-(%d+)')
-	if unitId and self.ignored_units[tonumber(unitId)] then
+	local uid = ToUID(guid)
+	if uid and self.ignored_units[uid] then
 		self.blacklist[guid] = Player.time + 10
 		return
 	end
@@ -432,10 +502,12 @@ function Ability:Add(spellId, buff, player, spellId2)
 		hasted_cooldown = false,
 		hasted_ticks = false,
 		known = false,
+		rank = 0,
 		mana_cost = 0,
 		cooldown_duration = 0,
 		buff_duration = 0,
 		tick_interval = 0,
+		summon_count = 0,
 		max_range = 40,
 		velocity = 0,
 		last_gained = 0,
@@ -463,7 +535,7 @@ function Ability:Ready(seconds)
 	return self:Cooldown() <= (seconds or 0) and (not self.requires_react or self:React() > (seconds or 0))
 end
 
-function Ability:Usable(seconds, pool)
+function Ability:Usable(seconds)
 	if not self.known then
 		return false
 	end
@@ -479,23 +551,28 @@ function Ability:Usable(seconds, pool)
 	return self:Ready(seconds)
 end
 
-function Ability:Remains(offGCD)
+function Ability:Remains()
 	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
-	local _, id, expires
+	local aura
 	for i = 1, 40 do
-		_, _, _, _, _, expires, _, _, _, id = UnitAura(self.aura_target, i, self.aura_filter)
-		if not id then
+		aura = UnitAura(self.aura_target, i, self.aura_filter)
+		if not aura then
 			return 0
-		elseif self:Match(id) then
-			if expires == 0 then
+		elseif self:Match(aura.spellId) then
+			if aura.expirationTime == 0 then
 				return 600 -- infinite duration
 			end
-			return max(0, expires - Player.ctime - (offGCD and 0 or Player.execute_remains))
+			return max(0, aura.expirationTime - Player.ctime - (self.off_gcd and 0 or Player.execute_remains))
 		end
 	end
 	return 0
+end
+
+function Ability:Expiring(seconds)
+	local remains = self:Remains()
+	return remains > 0 and remains < (seconds or Player.gcd)
 end
 
 function Ability:Refreshable()
@@ -564,6 +641,48 @@ function Ability:Ticking()
 	return count
 end
 
+function Ability:HighestRemains()
+	local highest
+	if self.traveling then
+		for _, cast in next, self.traveling do
+			if Player.time - cast.start < self.max_range / self.velocity then
+				highest = self:Duration()
+			end
+		end
+	end
+	if self.aura_targets then
+		local remains
+		for _, aura in next, self.aura_targets do
+			remains = max(0, aura.expires - Player.time - Player.execute_remains)
+			if remains > 0 and (not highest or remains > highest) then
+				highest = remains
+			end
+		end
+	end
+	return highest or 0
+end
+
+function Ability:LowestRemains()
+	local lowest
+	if self.traveling then
+		for _, cast in next, self.traveling do
+			if Player.time - cast.start < self.max_range / self.velocity then
+				lowest = self:Duration()
+			end
+		end
+	end
+	if self.aura_targets then
+		local remains
+		for _, aura in next, self.aura_targets do
+			remains = max(0, aura.expires - Player.time - Player.execute_remains)
+			if remains > 0 and (not lowest or remains < lowest) then
+				lowest = remains
+			end
+		end
+	end
+	return lowest or 0
+end
+
 function Ability:TickTime()
 	return self.hasted_ticks and (Player.haste_factor * self.tick_interval) or self.tick_interval
 end
@@ -576,11 +695,11 @@ function Ability:Cooldown()
 	if self.cooldown_duration > 0 and self:Casting() then
 		return self:CooldownDuration()
 	end
-	local start, duration = GetSpellCooldown(self.spellId)
-	if start == 0 then
+	local cooldown = GetSpellCooldown(self.spellId)
+	if cooldown.startTime == 0 then
 		return 0
 	end
-	return max(0, duration - (Player.ctime - start) - (self.off_gcd and 0 or Player.execute_remains))
+	return max(0, cooldown.duration - (Player.ctime - cooldown.startTime) - (self.off_gcd and 0 or Player.execute_remains))
 end
 
 function Ability:CooldownExpected()
@@ -590,30 +709,30 @@ function Ability:CooldownExpected()
 	if self.cooldown_duration > 0 and self:Casting() then
 		return self:CooldownDuration()
 	end
-	local start, duration = GetSpellCooldown(self.spellId)
-	if start == 0 then
+	local cooldown = GetSpellCooldown(self.spellId)
+	if cooldown.startTime == 0 then
 		return 0
 	end
-	local remains = duration - (Player.ctime - start)
+	local remains = cooldown.duration - (Player.ctime - cooldown.startTime)
 	local reduction = (Player.time - self.last_used) / (self:CooldownDuration() - remains)
 	return max(0, (remains * reduction) - (self.off_gcd and 0 or Player.execute_remains))
 end
 
 function Ability:Stack()
-	local _, id, expires, count
+	local aura
 	for i = 1, 40 do
-		_, _, count, _, _, expires, _, _, _, id = UnitAura(self.aura_target, i, self.aura_filter)
-		if not id then
+		aura = UnitAura(self.aura_target, i, self.aura_filter)
+		if not aura then
 			return 0
-		elseif self:Match(id) then
-			return (expires == 0 or expires - Player.ctime > (self.off_gcd and 0 or Player.execute_remains)) and count or 0
+		elseif self:Match(aura.spellId) then
+			return (aura.expirationTime == 0 or aura.expirationTime - Player.ctime > (self.off_gcd and 0 or Player.execute_remains)) and aura.applications or 0
 		end
 	end
 	return 0
 end
 
 function Ability:ManaCost()
-	return self.mana_cost > 0 and (self.mana_cost / 100 * Player.mana.max) or 0
+	return self.mana_cost > 0 and (self.mana_cost / 100 * Player.mana.base) or 0
 end
 
 function Ability:ACCost()
@@ -625,17 +744,21 @@ function Ability:ACGain()
 end
 
 function Ability:ChargesFractional()
-	local charges, max_charges, recharge_start, recharge_time = GetSpellCharges(self.spellId)
+	local info = GetSpellCharges(self.spellId)
+	if not info then
+		return 0
+	end
+	local charges = info.currentCharges
 	if self:Casting() then
-		if charges >= max_charges then
+		if charges >= info.maxCharges then
 			return charges - 1
 		end
 		charges = charges - 1
 	end
-	if charges >= max_charges then
+	if charges >= info.maxCharges then
 		return charges
 	end
-	return charges + ((max(0, Player.ctime - recharge_start + (self.off_gcd and 0 or Player.execute_remains))) / recharge_time)
+	return charges + ((max(0, Player.ctime - info.cooldownStartTime + (self.off_gcd and 0 or Player.execute_remains))) / info.cooldownDuration)
 end
 
 function Ability:Charges()
@@ -643,22 +766,26 @@ function Ability:Charges()
 end
 
 function Ability:MaxCharges()
-	local _, max_charges = GetSpellCharges(self.spellId)
-	return max_charges or 0
+	local info = GetSpellCharges(self.spellId)
+	return info and info.maxCharges or 0
 end
 
 function Ability:FullRechargeTime()
-	local charges, max_charges, recharge_start, recharge_time = GetSpellCharges(self.spellId)
+	local info = GetSpellCharges(self.spellId)
+	if not info then
+		return 0
+	end
+	local charges = info.currentCharges
 	if self:Casting() then
-		if charges >= max_charges then
-			return recharge_time
+		if charges >= info.maxCharges then
+			return info.cooldownDuration
 		end
 		charges = charges - 1
 	end
-	if charges >= max_charges then
+	if charges >= info.maxCharges then
 		return 0
 	end
-	return (max_charges - charges - 1) * recharge_time + (recharge_time - (Player.ctime - recharge_start) - (self.off_gcd and 0 or Player.execute_remains))
+	return (info.maxCharges - charges - 1) * info.cooldownDuration + (info.cooldownDuration - (Player.ctime - info.cooldownStartTime) - (self.off_gcd and 0 or Player.execute_remains))
 end
 
 function Ability:Duration()
@@ -674,11 +801,8 @@ function Ability:Channeling()
 end
 
 function Ability:CastTime()
-	local _, _, _, castTime = GetSpellInfo(self.spellId)
-	if castTime == 0 then
-		return 0
-	end
-	return castTime / 1000
+	local info = GetSpellInfo(self.spellId)
+	return info and info.castTime / 1000 or 0
 end
 
 function Ability:Previous(n)
@@ -752,6 +876,9 @@ end
 
 function Ability:CastSuccess(dstGUID)
 	self.last_used = Player.time
+	if self.ignore_cast then
+		return
+	end
 	Player.last_ability = self
 	if self.triggers_gcd then
 		Player.previous_gcd[10] = nil
@@ -762,9 +889,6 @@ function Ability:CastSuccess(dstGUID)
 	end
 	if Opt.auto_aoe and self.auto_aoe and self.auto_aoe.trigger == 'SPELL_CAST_SUCCESS' then
 		AutoAoe:Add(dstGUID, true)
-	end
-	if self.requires_pet then
-		Pet.stuck = false
 	end
 	if self.traveling and self.next_castGUID then
 		self.traveling[self.next_castGUID] = {
@@ -802,6 +926,13 @@ function Ability:CastLanded(dstGUID, event, missType)
 		self.range_est_start = nil
 	elseif self.max_range < Target.estimated_range then
 		Target.estimated_range = self.max_range
+	end
+	if Opt.auto_aoe and self.auto_aoe then
+		if event == 'SPELL_MISSED' and (missType == 'EVADE' or (missType == 'IMMUNE' and not self.ignore_immune)) then
+			AutoAoe:Remove(dstGUID)
+		elseif event == self.auto_aoe.trigger or (self.auto_aoe.trigger == 'SPELL_AURA_APPLIED' and event == 'SPELL_AURA_REFRESH') then
+			self:RecordTargetHit(dstGUID)
+		end
 	end
 	if Opt.previous and Opt.miss_effect and event == 'SPELL_MISSED' and amagicPreviousPanel.ability == self then
 		amagicPreviousPanel.border:SetTexture(ADDON_PATH .. 'misseffect.blp')
@@ -842,7 +973,7 @@ function Ability:ApplyAura(guid)
 	return aura
 end
 
-function Ability:RefreshAura(guid)
+function Ability:RefreshAura(guid, extend)
 	if AutoAoe.blacklist[guid] then
 		return
 	end
@@ -851,14 +982,14 @@ function Ability:RefreshAura(guid)
 		return self:ApplyAura(guid)
 	end
 	local duration = self:Duration()
-	aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + duration))
+	aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + (extend or duration)))
 	return aura
 end
 
-function Ability:RefreshAuraAll()
+function Ability:RefreshAuraAll(extend)
 	local duration = self:Duration()
 	for guid, aura in next, self.aura_targets do
-		aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + duration))
+		aura.expires = max(aura.expires, Player.time + min(duration * (self.no_pandemic and 1.0 or 1.3), (aura.expires - Player.time) + (extend or duration)))
 	end
 end
 
@@ -872,7 +1003,7 @@ end
 
 --[[
 Note: To get talent_node value for a talent, hover over talent and use macro:
-/dump GetMouseFocus():GetNodeID()
+/dump GetMouseFoci()[1]:GetNodeID()
 ]]
 
 -- Mage Abilities
@@ -1214,6 +1345,136 @@ local PowerInfusion = Ability:Add(10060, true)
 PowerInfusion.buff_duration = 20
 -- End Abilities
 
+-- Start Summoned Pets
+
+function SummonedPets:Purge()
+	for _, pet in next, self.known do
+		for guid, unit in next, pet.active_units do
+			if unit.expires <= Player.time then
+				pet.active_units[guid] = nil
+			end
+		end
+	end
+end
+
+function SummonedPets:Update()
+	wipe(self.known)
+	wipe(self.byUnitId)
+	for _, pet in next, self.all do
+		pet.known = pet.summon_spell and pet.summon_spell.known
+		if pet.known then
+			self.known[#SummonedPets.known + 1] = pet
+			self.byUnitId[pet.unitId] = pet
+		end
+	end
+end
+
+function SummonedPets:Count()
+	local count = 0
+	for _, pet in next, self.known do
+		count = count + pet:Count()
+	end
+	return count
+end
+
+function SummonedPets:Clear()
+	for _, pet in next, self.known do
+		pet:Clear()
+	end
+end
+
+function SummonedPet:Add(unitId, duration, summonSpell)
+	local pet = {
+		unitId = unitId,
+		duration = duration,
+		active_units = {},
+		summon_spell = summonSpell,
+		known = false,
+	}
+	setmetatable(pet, self)
+	SummonedPets.all[#SummonedPets.all + 1] = pet
+	return pet
+end
+
+function SummonedPet:Remains(initial)
+	if self.summon_spell and self.summon_spell.summon_count > 0 and self.summon_spell:Casting() then
+		return self.duration
+	end
+	local expires_max = 0
+	for guid, unit in next, self.active_units do
+		if (not initial or unit.initial) and unit.expires > expires_max then
+			expires_max = unit.expires
+		end
+	end
+	return max(0, expires_max - Player.time - Player.execute_remains)
+end
+
+function SummonedPet:Up(...)
+	return self:Remains(...) > 0
+end
+
+function SummonedPet:Down(...)
+	return self:Remains(...) <= 0
+end
+
+function SummonedPet:Count()
+	local count = 0
+	if self.summon_spell and self.summon_spell:Casting() then
+		count = count + self.summon_spell.summon_count
+	end
+	for guid, unit in next, self.active_units do
+		if unit.expires - Player.time > Player.execute_remains then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function SummonedPet:Expiring(seconds)
+	local count = 0
+	for guid, unit in next, self.active_units do
+		if unit.expires - Player.time <= (seconds or Player.execute_remains) then
+			count = count + 1
+		end
+	end
+	return count
+end
+
+function SummonedPet:AddUnit(guid)
+	local unit = {
+		guid = guid,
+		spawn = Player.time,
+		expires = Player.time + self.duration,
+	}
+	self.active_units[guid] = unit
+	return unit
+end
+
+function SummonedPet:RemoveUnit(guid)
+	if self.active_units[guid] then
+		self.active_units[guid] = nil
+	end
+end
+
+function SummonedPet:ExtendAll(seconds)
+	for guid, unit in next, self.active_units do
+		if unit.expires > Player.time then
+			unit.expires = unit.expires + seconds
+		end
+	end
+end
+
+function SummonedPet:Clear()
+	for guid in next, self.active_units do
+		self.active_units[guid] = nil
+	end
+end
+
+-- Summoned Pets
+
+
+-- End Summoned Pets
+
 -- Start Inventory Items
 
 local InventoryItem, inventoryItems, Trinket = {}, {}, {}
@@ -1226,6 +1487,7 @@ function InventoryItem:Add(itemId)
 		name = name,
 		icon = icon,
 		can_use = false,
+		off_gcd = true,
 	}
 	setmetatable(item, self)
 	inventoryItems[#inventoryItems + 1] = item
@@ -1249,13 +1511,16 @@ function InventoryItem:Count()
 end
 
 function InventoryItem:Cooldown()
-	local startTime, duration
+	local start, duration
 	if self.equip_slot then
-		startTime, duration = GetInventoryItemCooldown('player', self.equip_slot)
+		start, duration = GetInventoryItemCooldown('player', self.equip_slot)
 	else
-		startTime, duration = GetItemCooldown(self.itemId)
+		start, duration = GetItemCooldown(self.itemId)
 	end
-	return startTime == 0 and 0 or duration - (Player.ctime - startTime)
+	if start == 0 then
+		return 0
+	end
+	return max(0, duration - (Player.ctime - start) - (self.off_gcd and 0 or Player.execute_remains))
 end
 
 function InventoryItem:Ready(seconds)
@@ -1277,10 +1542,24 @@ function InventoryItem:Usable(seconds)
 end
 
 -- Inventory Items
-
+local Healthstone = InventoryItem:Add(5512)
+Healthstone.max_charges = 3
 -- Equipment
+local DreambinderLoomOfTheGreatCycle = InventoryItem:Add(208616)
+DreambinderLoomOfTheGreatCycle.cooldown_duration = 120
+DreambinderLoomOfTheGreatCycle.off_gcd = false
+local IridalTheEarthsMaster = InventoryItem:Add(208321)
+IridalTheEarthsMaster.cooldown_duration = 180
+IridalTheEarthsMaster.off_gcd = false
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
+Trinket.BelorrelosTheSuncaller = InventoryItem:Add(207172)
+Trinket.BelorrelosTheSuncaller.cast_spell = SolarMaelstrom
+Trinket.BelorrelosTheSuncaller.cooldown_duration = 120
+Trinket.BelorrelosTheSuncaller.off_gcd = false
+Trinket.NymuesUnravelingSpindle = InventoryItem:Add(208615)
+Trinket.NymuesUnravelingSpindle.cooldown_duration = 120
+Trinket.NymuesUnravelingSpindle.off_gcd = false
 -- End Inventory Items
 
 -- Start Abilities Functions
@@ -1313,6 +1592,14 @@ end
 
 -- Start Player Functions
 
+function Player:ManaTimeToMax()
+	local deficit = self.mana.max - self.mana.current
+	if deficit <= 0 then
+		return 0
+	end
+	return deficit / self.mana.regen
+end
+
 function Player:TimeInCombat()
 	if self.combat_start > 0 then
 		return self.time - self.combat_start
@@ -1332,20 +1619,20 @@ function Player:UnderAttack()
 end
 
 function Player:BloodlustActive()
-	local _, id
+	local aura
 	for i = 1, 40 do
-		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HELPFUL')
-		if not id then
+		aura = UnitAura('player', i, 'HELPFUL')
+		if not aura then
 			return false
 		elseif (
-			id == 2825 or   -- Bloodlust (Horde Shaman)
-			id == 32182 or  -- Heroism (Alliance Shaman)
-			id == 80353 or  -- Time Warp (Mage)
-			id == 90355 or  -- Ancient Hysteria (Hunter Pet - Core Hound)
-			id == 160452 or -- Netherwinds (Hunter Pet - Nether Ray)
-			id == 264667 or -- Primal Rage (Hunter Pet - Ferocity)
-			id == 381301 or -- Feral Hide Drums (Leatherworking)
-			id == 390386    -- Fury of the Aspects (Evoker)
+			aura.spellId == 2825 or   -- Bloodlust (Horde Shaman)
+			aura.spellId == 32182 or  -- Heroism (Alliance Shaman)
+			aura.spellId == 80353 or  -- Time Warp (Mage)
+			aura.spellId == 90355 or  -- Ancient Hysteria (Hunter Pet - Core Hound)
+			aura.spellId == 160452 or -- Netherwinds (Hunter Pet - Nether Ray)
+			aura.spellId == 264667 or -- Primal Rage (Hunter Pet - Ferocity)
+			aura.spellId == 381301 or -- Feral Hide Drums (Leatherworking)
+			aura.spellId == 390386    -- Fury of the Aspects (Evoker)
 		) then
 			return true
 		end
@@ -1353,15 +1640,17 @@ function Player:BloodlustActive()
 end
 
 function Player:Exhausted()
-	local _, i, id
+	local aura
 	for i = 1, 40 do
-		_, _, _, _, _, _, _, _, _, id = UnitAura('player', i, 'HARMFUL')
-		if (
-			id == 57724 or -- Sated (Alliance Shaman)
-			id == 57723 or -- Exhaustion (Horde Shaman)
-			id == 80354 or -- Temporal Displacement (Mage)
-			id == 264689 or-- Fatigued (Hunter)
-			id == 390435   -- Exhaustion (Evoker)
+		aura = UnitAura('player', i, 'HARMFUL')
+		if not aura then
+			return false
+		elseif (
+			aura.spellId == 57724 or -- Sated (Alliance Shaman)
+			aura.spellId == 57723 or -- Exhaustion (Horde Shaman)
+			aura.spellId == 80354 or -- Temporal Displacement (Mage)
+			aura.spellId == 264689 or-- Fatigued (Hunter)
+			aura.spellId == 390435   -- Exhaustion (Evoker)
 		) then
 			return true
 		end
@@ -1408,16 +1697,16 @@ function Player:UpdateTime(timeStamp)
 end
 
 function Player:UpdateKnown()
-	self.mana.max = UnitPowerMax('player', 0)
-	self.arcane_charges.max = UnitPowerMax('player', 16)
-
-	local node
+	local info, node
 	local configId = C_ClassTalents.GetActiveConfigID()
 	for _, ability in next, Abilities.all do
 		ability.known = false
 		ability.rank = 0
 		for _, spellId in next, ability.spellIds do
-			ability.spellId, ability.name, _, ability.icon = spellId, GetSpellInfo(spellId)
+			info = GetSpellInfo(spellId)
+			if info then
+				ability.spellId, ability.name, ability.icon = info.spellID, info.name, info.originalIconID
+			end
 			if IsPlayerSpell(spellId) or (ability.learn_spellId and IsPlayerSpell(ability.learn_spellId)) then
 				ability.known = true
 				break
@@ -1433,7 +1722,7 @@ function Player:UpdateKnown()
 				ability.known = ability.rank > 0
 			end
 		end
-		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.check_usable and not IsUsableSpell(ability.spellId)) then
+		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.check_usable and not IsSpellUsable(ability.spellId)) then
 			ability.known = false -- spell is locked, do not mark as known
 		end
 	end
@@ -1463,6 +1752,7 @@ function Player:UpdateKnown()
 	end
 
 	Abilities:Update()
+	SummonedPets:Update()
 
 	if APL[self.spec].precombat_variables then
 		APL[self.spec]:precombat_variables()
@@ -1489,11 +1779,15 @@ function Player:UpdateChannelInfo()
 		return
 	end
 	local ability = Abilities.bySpellId[spellId]
-	if ability and ability == channel.ability then
-		channel.chained = true
+	if ability then
+		if ability == channel.ability then
+			channel.chained = true
+		end
+		channel.interrupt_if = ability.interrupt_if
 	else
-		channel.ability = ability
+		channel.interrupt_if = nil
 	end
+	channel.ability = ability
 	channel.ticks = 0
 	channel.start = start / 1000
 	channel.ends = ends / 1000
@@ -1526,8 +1820,8 @@ function Player:UpdateThreat()
 end
 
 function Player:Update()
-	local _, start, ends, duration, spellId
-	self.main =  nil
+	local _, cooldown, start, ends, spellId, speed, max_speed
+	self.main = nil
 	self.cd = nil
 	self.interrupt = nil
 	self.extra = nil
@@ -1535,8 +1829,8 @@ function Player:Update()
 	self:UpdateTime()
 	self.haste_factor = 1 / (1 + UnitSpellHaste('player') / 100)
 	self.gcd = 1.5 * self.haste_factor
-	start, duration = GetSpellCooldown(61304)
-	self.gcd_remains = start > 0 and duration - (self.ctime - start) or 0
+	cooldown = GetSpellCooldown(61304)
+	self.gcd_remains = cooldown.startTime > 0 and cooldown.duration - (self.ctime - cooldown.startTime) or 0
 	_, _, _, start, ends, _, _, _, spellId = UnitCastingInfo('player')
 	if spellId then
 		self.cast.ability = Abilities.bySpellId[spellId]
@@ -1556,10 +1850,11 @@ function Player:Update()
 	end
 	self.mana.regen = GetPowerRegenForPowerType(0)
 	self.mana.current = UnitPower('player', 0) + (self.mana.regen * self.execute_remains)
-	if self.cast.ability then
+	if self.cast.ability and self.cast.ability.mana_cost > 0 then
 		self.mana.current = self.mana.current - self.cast.ability:ManaCost()
 	end
 	self.mana.current = clamp(self.mana.current, 0, self.mana.max)
+	self.mana.pct = self.mana.current / self.mana.max * 100
 	if self.spec == SPEC.ARCANE then
 		self.arcane_charges.current = UnitPower('player', 16)
 		if self.cast.ability then
@@ -1572,11 +1867,14 @@ function Player:Update()
 		end
 		self.arcane_charges.current = clamp(self.arcane_charges.current, 0, self.arcane_charges.max)
 	end
-	self.moving = GetUnitSpeed('player') ~= 0
+	speed, max_speed = GetUnitSpeed('player')
+	self.moving = speed ~= 0
+	self.movement_speed = max_speed / 7 * 100
 	self:UpdateThreat()
 
 	Pet:Update()
 
+	SummonedPets:Purge()
 	trackAuras:Purge()
 	if Opt.auto_aoe then
 		for _, ability in next, Abilities.autoAoe do
@@ -1610,7 +1908,6 @@ function Player:Init()
 	amagicPreviousPanel.ability = nil
 	self.guid = UnitGUID('player')
 	self.name = UnitName('player')
-	self.level = UnitLevel('player')
 	_, self.instance = IsInInstance()
 	Events:GROUP_ROSTER_UPDATE()
 	Events:PLAYER_SPECIALIZATION_CHANGED('player')
@@ -1648,10 +1945,14 @@ function Target:UpdateHealth(reset)
 		table.remove(self.health.history, 1)
 		self.health.history[25] = self.health.current
 	end
-	self.timeToDieMax = self.health.current / Player.health.max * 10
+	self.timeToDieMax = self.health.current / Player.health.max * (Player.spec == SPEC.SHADOW and 10 or 20)
 	self.health.pct = self.health.max > 0 and (self.health.current / self.health.max * 100) or 100
 	self.health.loss_per_sec = (self.health.history[1] - self.health.current) / 5
-	self.timeToDie = self.health.loss_per_sec > 0 and min(self.timeToDieMax, self.health.current / self.health.loss_per_sec) or self.timeToDieMax
+	self.timeToDie = (
+		(self.dummy and 600) or
+		(self.health.loss_per_sec > 0 and min(self.timeToDieMax, self.health.current / self.health.loss_per_sec)) or
+		self.timeToDieMax
+	)
 end
 
 function Target:Update()
@@ -1661,7 +1962,9 @@ function Target:Update()
 	local guid = UnitGUID('target')
 	if not guid then
 		self.guid = nil
+		self.uid = nil
 		self.boss = false
+		self.dummy = false
 		self.stunnable = true
 		self.classification = 'normal'
 		self.player = false
@@ -1680,21 +1983,26 @@ function Target:Update()
 	end
 	if guid ~= self.guid then
 		self.guid = guid
+		self.uid = ToUID(guid) or 0
 		self:UpdateHealth(true)
 	end
 	self.boss = false
+	self.dummy = false
 	self.stunnable = true
 	self.classification = UnitClassification('target')
 	self.player = UnitIsPlayer('target')
-	self.level = UnitLevel('target')
 	self.hostile = UnitCanAttack('player', 'target') and not UnitIsDead('target')
+	self.level = UnitLevel('target')
+	if self.level == -1 then
+		self.level = Player.level + 3
+	end
 	if not self.player and self.classification ~= 'minus' and self.classification ~= 'normal' then
-		if self.level == -1 or (Player.instance == 'party' and self.level >= Player.level + 2) then
-			self.boss = true
-			self.stunnable = false
-		elseif Player.instance == 'raid' or (self.health.max > Player.health.max * 10) then
-			self.stunnable = false
-		end
+		self.boss = self.level >= (Player.level + 3)
+		self.stunnable = self.level < (Player.level + 2)
+	end
+	if self.Dummies[self.uid] then
+		self.boss = true
+		self.dummy = true
 	end
 	if self.hostile or Opt.always_on then
 		UI:UpdateCombat()
@@ -1979,6 +2287,12 @@ end
 
 -- End Ability Modifications
 
+-- Start Summoned Pet Modifications
+
+
+
+-- End Summoned Pet Modifications
+
 local function UseCooldown(ability, overwrite)
 	if Opt.cooldown and (not Opt.boss_only or Target.boss) and (not Player.cd or overwrite) then
 		Player.cd = ability
@@ -2205,8 +2519,8 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 	self.use_cds = (Target.boss and Player.group_size >= 10) or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or Combustion:Remains() > self.skb_duration
 	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Fireball:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
-	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains(true))
-	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down(true) and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
+	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains())
+	self.combustion_in_cast = self.hot_streak_spells_in_flight_off_gcd == 0 and self.time_to_combustion <= 0 and Combustion:Down() and ((Scorch:Casting() or Fireball:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))
 end
 
 APL[SPEC.FIRE].active_talents = function(self)
@@ -2776,7 +3090,7 @@ function UI:CreateOverlayGlows()
 			end
 		end
 	end
-	UI:UpdateGlowColorAndScale()
+	self:UpdateGlowColorAndScale()
 end
 
 function UI:UpdateGlows()
@@ -2812,6 +3126,18 @@ end
 
 function UI:UpdateDraggable()
 	local draggable = not (Opt.locked or Opt.snap or Opt.aoe)
+	amagicPanel:SetMovable(not Opt.snap)
+	amagicPreviousPanel:SetMovable(not Opt.snap)
+	amagicCooldownPanel:SetMovable(not Opt.snap)
+	amagicInterruptPanel:SetMovable(not Opt.snap)
+	amagicExtraPanel:SetMovable(not Opt.snap)
+	if not Opt.snap then
+		amagicPanel:SetUserPlaced(true)
+		amagicPreviousPanel:SetUserPlaced(true)
+		amagicCooldownPanel:SetUserPlaced(true)
+		amagicInterruptPanel:SetUserPlaced(true)
+		amagicExtraPanel:SetUserPlaced(true)
+	end
 	amagicPanel:EnableMouse(draggable or Opt.aoe)
 	amagicPanel.button:SetShown(Opt.aoe)
 	amagicPreviousPanel:EnableMouse(draggable)
@@ -2851,29 +3177,29 @@ UI.anchor_points = {
 	blizzard = { -- Blizzard Personal Resource Display (Default)
 		[SPEC.ARCANE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -9 },
 		},
 		[SPEC.FIRE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -9 },
 		},
 		[SPEC.FROST] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 36 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -9 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -9 },
 		},
 	},
 	kui = { -- Kui Nameplates
 		[SPEC.ARCANE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 24 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -1 },
 		},
 		[SPEC.FIRE] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 24 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -1 },
 		},
 		[SPEC.FROST] = {
 			['above'] = { 'BOTTOM', 'TOP', 0, 24 },
-			['below'] = { 'TOP', 'BOTTOM', 0, -1 }
+			['below'] = { 'TOP', 'BOTTOM', 0, -1 },
 		},
 	},
 }
@@ -2927,20 +3253,27 @@ function UI:Disappear()
 	Player.cd = nil
 	Player.interrupt = nil
 	Player.extra = nil
-	UI:UpdateGlows()
+	self:UpdateGlows()
+end
+
+function UI:Reset()
+	amagicPanel:ClearAllPoints()
+	amagicPanel:SetPoint('CENTER', 0, -169)
+	self:SnapAllPanels()
 end
 
 function UI:UpdateDisplay()
 	Timer.display = 0
-	local border, dim, dim_cd, border, text_center, text_tr, text_cd, color_center
+	local border, dim, dim_cd, text_center, text_tr, text_cd
+	local channel = Player.channel
 
 	if Opt.dimmer then
 		dim = not ((not Player.main) or
-		           (Player.main.spellId and IsUsableSpell(Player.main.spellId)) or
-		           (Player.main.itemId and IsUsableItem(Player.main.itemId)))
+		           (Player.main.spellId and IsSpellUsable(Player.main.spellId)) or
+		           (Player.main.itemId and IsItemUsable(Player.main.itemId)))
 		dim_cd = not ((not Player.cd) or
-		           (Player.cd.spellId and IsUsableSpell(Player.cd.spellId)) or
-		           (Player.cd.itemId and IsUsableItem(Player.cd.itemId)))
+		           (Player.cd.spellId and IsSpellUsable(Player.cd.spellId)) or
+		           (Player.cd.itemId and IsItemUsable(Player.cd.itemId)))
 	end
 	if Player.main then
 		if Player.main.requires_react then
@@ -2968,19 +3301,17 @@ function UI:UpdateDisplay()
 			dim = Opt.dimmer
 		end
 	end
-	if Player.channel.tick_count > 0 then
+	if channel.ability and not channel.ability.ignore_channel and channel.tick_count > 0 then
 		dim = Opt.dimmer
-		if Player.channel.tick_count > 1 then
+		if channel.tick_count > 1 then
 			local ctime = GetTime()
-			local channel = Player.channel
 			channel.ticks = ((ctime - channel.start) / channel.tick_interval) - channel.ticks_extra
 			channel.ticks_remain = (channel.ends - ctime) / channel.tick_interval
 			text_center = format('TICKS\n%.1f', max(0, channel.ticks))
 			if channel.ability == Player.main then
 				if channel.ticks_remain < 1 or channel.early_chainable then
 					dim = false
-					text_center = 'CHAIN'
-					color_center = 'green'
+					text_center = '|cFF00FF00CHAIN'
 				end
 			elseif channel.interruptible then
 				dim = false
@@ -2989,16 +3320,6 @@ function UI:UpdateDisplay()
 	end
 	if Player.major_cd_remains > 0 then
 		text_tr = format('%.1fs', Player.major_cd_remains)
-	end
-	if color_center ~= amagicPanel.text.center.color then
-		amagicPanel.text.center.color = color_center
-		if color_center == 'green' then
-			amagicPanel.text.center:SetTextColor(0, 1, 0, 1)
-		elseif color_center == 'red' then
-			amagicPanel.text.center:SetTextColor(1, 0, 0, 1)
-		else
-			amagicPanel.text.center:SetTextColor(1, 1, 1, 1)
-		end
 	end
 	if border ~= amagicPanel.border.overlay then
 		amagicPanel.border.overlay = border
@@ -3028,8 +3349,8 @@ function UI:UpdateCombat()
 	if Player.cd then
 		amagicCooldownPanel.icon:SetTexture(Player.cd.icon)
 		if Player.cd.spellId then
-			local start, duration = GetSpellCooldown(Player.cd.spellId)
-			amagicCooldownPanel.swipe:SetCooldown(start, duration)
+			local cooldown = GetSpellCooldown(Player.cd.spellId)
+			amagicCooldownPanel.swipe:SetCooldown(cooldown.startTime, cooldown.duration)
 		end
 	end
 	if Player.extra then
@@ -3086,12 +3407,12 @@ function Events:ADDON_LOADED(name)
 		UI:UpdateAlpha()
 		UI:UpdateScale()
 		if firstRun then
-			print('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
-			print('Type |cFFFFD000' .. SLASH_Automagically1 .. '|r for a list of commands.')
+			log('It looks like this is your first time running ' .. ADDON .. ', why don\'t you take some time to familiarize yourself with the commands?')
+			log('Type |cFFFFD000' .. SLASH_Automagically1 .. '|r for a list of commands.')
 			UI:SnapAllPanels()
 		end
 		if UnitLevel('player') < 10 then
-			print('[|cFFFFD000Warning|r] ' .. ADDON .. ' is not designed for players under level 10, and almost certainly will not operate properly!')
+			log('[|cFFFFD000Warning|r]', ADDON, 'is not designed for players under level 10, and almost certainly will not operate properly!')
 		end
 	end
 end
@@ -3111,6 +3432,7 @@ CombatEvent.TRIGGER = function(timeStamp, event, _, srcGUID, _, _, _, dstGUID, _
 	   e == 'SPELL_CAST_SUCCESS' or
 	   e == 'SPELL_CAST_FAILED' or
 	   e == 'SPELL_DAMAGE' or
+	   e == 'SPELL_ABSORBED' or
 	   e == 'SPELL_ENERGIZE' or
 	   e == 'SPELL_PERIODIC_DAMAGE' or
 	   e == 'SPELL_MISSED' or
@@ -3126,9 +3448,17 @@ CombatEvent.TRIGGER = function(timeStamp, event, _, srcGUID, _, _, _, dstGUID, _
 end
 
 CombatEvent.UNIT_DIED = function(event, srcGUID, dstGUID)
+	local uid = ToUID(dstGUID)
+	if not uid or Target.Dummies[uid] then
+		return
+	end
 	trackAuras:Remove(dstGUID)
 	if Opt.auto_aoe then
 		AutoAoe:Remove(dstGUID)
+	end
+	local pet = SummonedPets.byUnitId[uid]
+	if pet then
+		pet:RemoveUnit(dstGUID)
 	end
 end
 
@@ -3174,8 +3504,41 @@ CombatEvent.SWING_MISSED = function(event, srcGUID, dstGUID, missType, offHand, 
 	end
 end
 
+CombatEvent.SPELL_SUMMON = function(event, srcGUID, dstGUID)
+	if srcGUID ~= Player.guid then
+		return
+	end
+	local uid = ToUID(dstGUID)
+	if not uid then
+		return
+	end
+	local pet = SummonedPets.byUnitId[uid]
+	if pet then
+		pet:AddUnit(dstGUID)
+	end
+end
+
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
 	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
+		local uid = ToUID(srcGUID)
+		if uid then
+			local pet = SummonedPets.byUnitId[uid]
+			if pet then
+				local unit = pet.active_units[srcGUID]
+				if unit then
+					if event == 'SPELL_CAST_SUCCESS' and pet.CastSuccess then
+						pet:CastSuccess(unit, spellId, dstGUID)
+					elseif event == 'SPELL_CAST_START' and pet.CastStart then
+						pet:CastStart(unit, spellId, dstGUID)
+					elseif event == 'SPELL_CAST_FAILED' and pet.CastFailed then
+						pet:CastFailed(unit, spellId, dstGUID, missType)
+					elseif (event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH') and pet.CastLanded then
+						pet:CastLanded(unit, spellId, dstGUID, event, missType)
+					end
+					--log(format('PET %d EVENT %s SPELL %s ID %d', pet.unitId, event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+				end
+			end
+		end
 		return
 	end
 
@@ -3189,7 +3552,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 
 	local ability = spellId and Abilities.bySpellId[spellId]
 	if not ability then
-		--print(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
+		--log(format('EVENT %s TRACK CHECK FOR UNKNOWN %s ID %d', event, type(spellName) == 'string' and spellName or 'Unknown', spellId or 0))
 		return
 	end
 
@@ -3212,18 +3575,11 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			ability:RemoveAura(dstGUID)
 		end
 	end
-	if dstGUID == Player.guid or dstGUID == Pet.guid then
+	if dstGUID == Player.guid then
 		if event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 			ability.last_gained = Player.time
 		end
 		return -- ignore buffs beyond here
-	end
-	if Opt.auto_aoe then
-		if event == 'SPELL_MISSED' and (missType == 'EVADE' or (missType == 'IMMUNE' and not ability.ignore_immune)) then
-			AutoAoe:Remove(dstGUID)
-		elseif ability.auto_aoe and (event == ability.auto_aoe.trigger or ability.auto_aoe.trigger == 'SPELL_AURA_APPLIED' and event == 'SPELL_AURA_REFRESH') then
-			ability:RecordTargetHit(dstGUID)
-		end
 	end
 	if event == 'SPELL_DAMAGE' or event == 'SPELL_ABSORBED' or event == 'SPELL_MISSED' or event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 		ability:CastLanded(dstGUID, event, missType)
@@ -3252,13 +3608,24 @@ end
 
 function Events:UNIT_HEALTH(unitId)
 	if unitId == 'player' then
-		Player.health.current = UnitHealth('player')
-		Player.health.max = UnitHealthMax('player')
+		Player.health.current = UnitHealth(unitId)
+		Player.health.max = UnitHealthMax(unitId)
 		Player.health.pct = Player.health.current / Player.health.max * 100
 	elseif unitId == 'pet' then
-		Pet.health.current = UnitHealth('pet')
-		Pet.health.max = UnitHealthMax('pet')
+		Pet.health.current = UnitHealth(unitId)
+		Pet.health.max = UnitHealthMax(unitId)
 		Pet.health.pct = Pet.health.current / Pet.health.max * 100
+	end
+end
+
+function Events:UNIT_MAXPOWER(unitId)
+	if unitId == 'player' then
+		Player.level = UnitLevel(unitId)
+		Player.mana.base = Player.BaseMana[Player.level]
+		Player.mana.max = UnitPowerMax(unitId, 0)
+		Player.arcane_charges.max = UnitPowerMax(unitId, 16)
+	elseif unitId == 'pet' then
+		Pet.mana.max = UnitPowerMax(unitId, 0)
 	end
 end
 
@@ -3328,6 +3695,9 @@ function Events:PLAYER_REGEN_ENABLED()
 	if Opt.auto_aoe then
 		AutoAoe:Clear()
 	end
+	if APL[Player.spec].precombat_variables then
+		APL[Player.spec]:precombat_variables()
+	end
 end
 
 function Events:PLAYER_EQUIPMENT_CHANGED()
@@ -3360,6 +3730,9 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 
 	Player.set_bonus.t29 = (Player:Equipped(200315) and 1 or 0) + (Player:Equipped(200317) and 1 or 0) + (Player:Equipped(200318) and 1 or 0) + (Player:Equipped(200319) and 1 or 0) + (Player:Equipped(200320) and 1 or 0)
 	Player.set_bonus.t30 = (Player:Equipped(202549) and 1 or 0) + (Player:Equipped(202550) and 1 or 0) + (Player:Equipped(202551) and 1 or 0) + (Player:Equipped(202552) and 1 or 0) + (Player:Equipped(202554) and 1 or 0)
+	Player.set_bonus.t31 = (Player:Equipped(207288) and 1 or 0) + (Player:Equipped(207289) and 1 or 0) + (Player:Equipped(207290) and 1 or 0) + (Player:Equipped(207291) and 1 or 0) + (Player:Equipped(207293) and 1 or 0)
+	Player.set_bonus.t32 = (Player:Equipped(217231) and 1 or 0) + (Player:Equipped(217232) and 1 or 0) + (Player:Equipped(217233) and 1 or 0) + (Player:Equipped(217234) and 1 or 0) + (Player:Equipped(217235) and 1 or 0)
+	Player.set_bonus.t33 = (Player:Equipped(212090) and 1 or 0) + (Player:Equipped(212091) and 1 or 0) + (Player:Equipped(212092) and 1 or 0) + (Player:Equipped(212093) and 1 or 0) + (Player:Equipped(212095) and 1 or 0)
 
 	Player:UpdateKnown()
 end
@@ -3374,6 +3747,7 @@ function Events:PLAYER_SPECIALIZATION_CHANGED(unitId)
 	Events:PLAYER_EQUIPMENT_CHANGED()
 	Events:PLAYER_REGEN_ENABLED()
 	Events:UNIT_HEALTH('player')
+	Events:UNIT_MAXPOWER('player')
 	UI.OnResourceFrameShow()
 	Target:Update()
 	Player:Update()
@@ -3385,15 +3759,17 @@ end
 
 function Events:SPELL_UPDATE_COOLDOWN()
 	if Opt.spell_swipe then
-		local _, start, duration, castStart, castEnd
+		local _, cooldown, castStart, castEnd
 		_, _, _, castStart, castEnd = UnitCastingInfo('player')
 		if castStart then
-			start = castStart / 1000
-			duration = (castEnd - castStart) / 1000
+			cooldown = {
+				startTime = castStart / 1000,
+				duration = (castEnd - castStart) / 1000
+			}
 		else
-			start, duration = GetSpellCooldown(61304)
+			cooldown = GetSpellCooldown(61304)
 		end
-		amagicPanel.swipe:SetCooldown(start, duration)
+		amagicPanel.swipe:SetCooldown(cooldown.startTime, cooldown.duration)
 	end
 end
 
@@ -3485,7 +3861,7 @@ local function Status(desc, opt, ...)
 	else
 		opt_view = opt and '|cFF00C000On|r' or '|cFFC00000Off|r'
 	end
-	print(ADDON, '-', desc .. ':', opt_view, ...)
+	log(desc .. ':', opt_view, ...)
 end
 
 SlashCmdList[ADDON] = function(msg, editbox)
@@ -3511,7 +3887,7 @@ SlashCmdList[ADDON] = function(msg, editbox)
 			else
 				Opt.snap = false
 				Opt.locked = false
-				amagicPanel:ClearAllPoints()
+				UI:Reset()
 			end
 			UI:UpdateDraggable()
 			UI.OnResourceFrameShow()
@@ -3751,12 +4127,10 @@ SlashCmdList[ADDON] = function(msg, editbox)
 		return Status('Mana conservation threshold (Arcane)', Opt.conserve_mana .. '%')
 	end
 	if msg[1] == 'reset' then
-		amagicPanel:ClearAllPoints()
-		amagicPanel:SetPoint('CENTER', 0, -169)
-		UI:SnapAllPanels()
+		UI:Reset()
 		return Status('Position has been reset to', 'default')
 	end
-	print(ADDON, '(version: |cFFFFD000' .. GetAddOnMetadata(ADDON, 'Version') .. '|r) - Commands:')
+	print(ADDON, '(version: |cFFFFD000' .. C_AddOns.GetAddOnMetadata(ADDON, 'Version') .. '|r) - Commands:')
 	for _, cmd in next, {
 		'locked |cFF00C000on|r/|cFFC00000off|r - lock the ' .. ADDON .. ' UI so that it can\'t be moved',
 		'snap |cFF00C000above|r/|cFF00C000below|r/|cFFC00000off|r - snap the ' .. ADDON .. ' UI to the Personal Resource Display',

@@ -1,20 +1,23 @@
 <Bindings>
-	<Binding name="Toggle Targets +" header="AUTOMAGICALLY" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGETMORE" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_ToggleTargetMode()
 	</Binding>
-	<Binding name="Toggle Targets -" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGETLESS" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_ToggleTargetModeReverse()
 	</Binding>
-	<Binding name="Set Targets to 1" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGET1" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_SetTargetMode(1)
 	</Binding>
-	<Binding name="Set Targets to 2" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGET2" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_SetTargetMode(2)
 	</Binding>
-	<Binding name="Set Targets to 3" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGET3" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_SetTargetMode(3)
 	</Binding>
-	<Binding name="Set Targets to (Arcane: 4+, Fire: 4+, Frost: 6+)" category="ADDONS">
+	<Binding name="AUTOMAGICALLY_TARGET4" category="BINDING_CATEGORY_AUTOMAGICALLY">
 		Automagically_SetTargetMode(4)
+	</Binding>
+	<Binding name="AUTOMAGICALLY_TARGET5" category="BINDING_CATEGORY_AUTOMAGICALLY">
+		Automagically_SetTargetMode(5)
 	</Binding>
 </Bindings>
