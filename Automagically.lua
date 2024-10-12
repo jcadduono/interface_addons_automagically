@@ -278,20 +278,22 @@ local Player = {
 
 -- base mana pool max for each level
 Player.BaseMana = {
-	260,	270,	285,	300,	310,	--  5
-	330,	345,	360,	380,	400,	-- 10
-	430,	465,	505,	550,	595,	-- 15
-	645,	700,	760,	825,	890,	-- 20
-	965,	1050,	1135,	1230,	1335,	-- 25
-	1445,	1570,	1700,	1845,	2000,	-- 30
-	2165,	2345,	2545,	2755,	2990,	-- 35
-	3240,	3510,	3805,	4125,	4470,	-- 40
-	4845,	5250,	5690,	6170,	6685,	-- 45
-	7245,	7855,	8510,	9225,	10000,	-- 50
-	11745,	13795,	16205,	19035,	22360,	-- 55
-	26265,	30850,	36235,	42565,	50000,	-- 60
-	58730,	68985,	81030,	95180,	111800,	-- 65
-	131325,	154255,	181190,	212830,	250000,	-- 70
+	260,     270,     285,     300,     310,     -- 5
+	330,     345,     360,     380,     400,     -- 10
+	430,     465,     505,     550,     595,     -- 15
+	645,     700,     760,     825,     890,     -- 20
+	965,     1050,    1135,    1230,    1335,    -- 25
+	1445,    1570,    1700,    1845,    2000,    -- 30
+	2165,    2345,    2545,    2755,    2990,    -- 35
+	3240,    3510,    3805,    4125,    4470,    -- 40
+	4845,    5250,    5690,    6170,    6685,    -- 45
+	7245,    7855,    8510,    9225,    10000,   -- 50
+	11745,   13795,   16205,   19035,   22360,   -- 55
+	26265,   30850,   36235,   42565,   50000,   -- 60
+	58730,   68985,   81030,   95180,   111800,  -- 65
+	131325,  154255,  181190,  212830,  250000,  -- 70
+	293650,  344930,  405160,  475910,  559015,  -- 75
+	656630,  771290,  905970,  1064170, 2500000, -- 80
 }
 
 -- current pet information
@@ -725,6 +727,10 @@ function Ability:Stack()
 		end
 	end
 	return 0
+end
+
+function Ability:MaxStack()
+	return self.max_stack
 end
 
 function Ability:ManaCost()
@@ -1186,6 +1192,7 @@ Ignite.tick_interval = 1
 Ignite:AutoAoe(false, 'apply')
 local ImprovedScorch = Ability:Add(383604, false, true, 383608)
 ImprovedScorch.buff_duration = 12
+ImprovedScorch.max_stack = 2
 local IncendiaryEruptions = Ability:Add(383665, false, true)
 local Kindling = Ability:Add(155148, false, true)
 local LivingBomb = Ability:Add(44457, false, true, 217694)
@@ -1215,6 +1222,7 @@ PhoenixFlames.requires_charge = true
 PhoenixFlames.travel_delay = 0.1
 PhoenixFlames:SetVelocity(50)
 PhoenixFlames:AutoAoe()
+local PhoenixReborn = Ability:Add(453123, false, true)
 local Pyroblast = Ability:Add(11366, false, true)
 Pyroblast.mana_cost = 2
 Pyroblast.triggers_combat = true
@@ -1229,6 +1237,11 @@ local TemporalWarp = Ability:Add(386539, true, true, 386540)
 TemporalWarp.buff_duration = 40
 local Quickflame = Ability:Add(450807, false, true)
 ------ Procs
+local Calefaction = Ability:Add(408673, true, true)
+Calefaction.max_stack = 25
+Calefaction.buff_duration = 60
+local FlamesFury = Ability:Add(409964, true, true)
+FlamesFury.buff_duration = 30
 local HeatingUp = Ability:Add(48107, true, true)
 HeatingUp.buff_duration = 10
 local HotStreak = Ability:Add(195283, true, true, 48108)
@@ -1726,6 +1739,8 @@ function Player:UpdateKnown()
 		LivingBomb.explosion.known = true
 		LivingBomb.spread.known = true
 	end
+	Calefaction.known = PhoenixReborn.known
+	FlamesFury.known = PhoenixReborn.known
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -2193,6 +2208,10 @@ function Flamestrike:Free()
 	return HotStreak:Up() or Hyperthermia:Up()
 end
 
+function PhoenixFlames:Free()
+	return PhoenixReborn.known and FlamesFury:Up()
+end
+
 function Combustion:Remains(offGCD)
 	local remains = Ability.Remains(self, offGCD)
 	if not offGCD and SunKingsBlessing.known and Ability.Remains(FuryOfTheSunKing) > 0 and (Pyroblast:Casting() or Flamestrike:Casting()) then
@@ -2236,7 +2255,7 @@ function ImprovedScorch:Stack()
 	if self:Active() and Scorch:Casting() then
 		stack = stack + 1
 	end
-	return clamp(stack, 0, 3)
+	return clamp(stack, 0, self:MaxStack())
 end
 
 function Blizzard:CastSuccess(...)
@@ -2537,6 +2556,7 @@ actions.combustion_phase+=/pyroblast,if=prev_gcd.1.scorch&buff.heating_up.react&
 actions.combustion_phase+=/shifting_power,if=buff.combustion.up&!action.fire_blast.charges&(action.phoenix_flames.charges<action.phoenix_flames.max_charges|talent.call_of_the_sun_king)&variable.combustion_shifting_power<=active_enemies
 actions.combustion_phase+=/flamestrike,if=buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&active_enemies>=variable.skb_flamestrike&buff.fury_of_the_sun_king.expiration_delay_remains=0
 actions.combustion_phase+=/pyroblast,if=buff.fury_of_the_sun_king.up&buff.fury_of_the_sun_king.remains>cast_time&buff.fury_of_the_sun_king.expiration_delay_remains=0
+actions.combustion_phase+=/phoenix_flames,if=talent.phoenix_reborn&buff.heating_up.react+hot_streak_spells_in_flight<2&buff.flames_fury.up
 actions.combustion_phase+=/scorch,if=improved_scorch.active&(debuff.improved_scorch.remains<4*gcd.max)&active_enemies<variable.combustion_flamestrike
 actions.combustion_phase+=/fireball,if=buff.combustion.remains>cast_time&buff.flame_accelerant.react
 actions.combustion_phase+=/phoenix_flames,if=!talent.call_of_the_sun_king&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2
@@ -2588,7 +2608,10 @@ actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active
 		local apl = self:skb()
 		if apl then return apl end
 	end
-	if ImprovedScorch.known and Scorch:Usable() and ImprovedScorch:Active() and ImprovedScorch:Stack() < 3 then
+	if PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
+		return PhoenixFlames
+	end
+	if ImprovedScorch.known and Scorch:Usable() and ImprovedScorch:Active() and ImprovedScorch:Stack() < ImprovedScorch:MaxStack() then
 		return Scorch
 	end
 	if FlameAccelerant.known and Fireball:Usable() and Combustion:Remains() > Fireball:CastTime() and FlameAccelerant:Up() then
@@ -2689,7 +2712,7 @@ actions.standard_rotation+=/fireball
 	end
 	if FireBlast:Usable() and Firestarter:Down() and not self.fire_blast_pooling and (not FuryOfTheSunKing.known or FuryOfTheSunKing:Down()) and (
 		(HeatingUp:Up() and (Fireball:Casting() or Pyroblast:Casting()) and (Player.cast.remains < 0.5 or not Hyperthermia.known)) or
-		(Scorch:Execute() and (not ImprovedScorch.known or ImprovedScorch:Stack() >= 3 or FireBlast:FullRechargeTime() < 3) and ((HeatingUp:Up() and not Scorch:Casting()) or (HotStreak:Down() and Scorch:Casting() and self.hot_streak_spells_in_flight_off_gcd == 0)))
+		(Scorch:Execute() and (not ImprovedScorch.known or ImprovedScorch:Stack() >= ImprovedScorch:MaxStack() or FireBlast:FullRechargeTime() < 3) and ((HeatingUp:Up() and not Scorch:Casting()) or (HotStreak:Down() and Scorch:Casting() and self.hot_streak_spells_in_flight_off_gcd == 0)))
 	) then
 		UseExtra(FireBlast, true)
 	end
@@ -2702,12 +2725,16 @@ actions.standard_rotation+=/fireball
 	if CallOfTheSunKing.known and PhoenixFlames:Usable() and (not FeelTheBurn.known or FeelTheBurn:Remains() < (2 * Player.gcd)) then
 		return PhoenixFlames
 	end
-	if ImprovedScorch.known and Scorch:Usable() and ImprovedScorch:Active() and ImprovedScorch:Stack() < 3 and Target.timeToDie > (4 + ImprovedScorch:Remains()) then
+	if ImprovedScorch.known and Scorch:Usable() and ImprovedScorch:Active() and ImprovedScorch:Stack() < ImprovedScorch:MaxStack() and Target.timeToDie > (4 + ImprovedScorch:Remains()) then
 		return Scorch
 	end
-	if CallOfTheSunKing.known and PhoenixFlames:Usable() and HotStreak:Down() and self.hot_streak_spells_in_flight == 0 and (
-		PhoenixFlames:ChargesFractional() > 2.5 or
-		(PhoenixFlames:ChargesFractional() > 1.5 and (not FeelTheBurn.known or FeelTheBurn:Remains() < (2 * Player.gcd)))
+	if PhoenixFlames:Usable() and (
+		(PhoenixReborn.known and not CallOfTheSunKing.known and not self.phoenix_pooling and HotStreak:Down() and FlamesFury:Up()) or
+		(CallOfTheSunKing.known and HotStreak:Down() and self.hot_streak_spells_in_flight == 0 and (
+			(PhoenixReborn.known and not self.phoenix_pooling and FlamesFury:Up()) or
+			PhoenixFlames:ChargesFractional() > 2.5 or
+			(PhoenixFlames:ChargesFractional() > 1.5 and (not FeelTheBurn.known or FeelTheBurn:Remains() < (3 * Player.gcd)))
+		))
 	) then
 		return PhoenixFlames
 	end
