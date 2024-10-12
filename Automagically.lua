@@ -1168,6 +1168,7 @@ DragonsBreath.cooldown_duration = 45
 DragonsBreath:AutoAoe()
 local FeelTheBurn = Ability:Add(383391, true, true, 383395)
 FeelTheBurn.buff_duration = 5
+FeelTheBurn.max_stack = 3
 local Fireball = Ability:Add(133, false, true)
 Fireball.mana_cost = 2
 Fireball.triggers_combat = true
@@ -1242,6 +1243,7 @@ Calefaction.max_stack = 25
 Calefaction.buff_duration = 60
 local FlamesFury = Ability:Add(409964, true, true)
 FlamesFury.buff_duration = 30
+FlamesFury.max_stack = 2
 local HeatingUp = Ability:Add(48107, true, true)
 HeatingUp.buff_duration = 10
 local HotStreak = Ability:Add(195283, true, true, 48108)
@@ -1335,6 +1337,10 @@ local Icicles = Ability:Add(76613, true, true, 205473)
 Icicles.buff_duration = 60
 local WintersChill = Ability:Add(228358, false, true)
 WintersChill.buff_duration = 6
+-- Hero talents
+local Rondurmancy = Ability:Add(449596, true, true)
+local SpellfireSpheres = Ability:Add(448601, true, true, 448604)
+SpellfireSpheres.max_stack = 3
 -- Tier set bonuses
 
 -- Racials
@@ -2162,6 +2168,21 @@ function Icicles:Stack()
 	return min(5, count)
 end
 
+function FeelTheBurn:Remains()
+	if PhoenixFlames.known and PhoenixFlames:Traveling() > 0 then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
+end
+
+function FeelTheBurn:Stack()
+	local stack = Ability.Stack(self)
+	if PhoenixFlames.known then
+		stack = stack + PhoenixFlames:Traveling()
+	end
+	return clamp(stack, 0, self:MaxStack())
+end
+
 function Firestarter:Remains()
 	if not self.known or Target.health.pct <= 90 then
 		return 0
@@ -2271,6 +2292,13 @@ end
 function Evocation:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
 	APL[SPEC.ARCANE]:toggle_burn_phase(false)
+end
+
+function SpellfireSpheres:MaxStack()
+	if Rondurmancy.known then
+		return 5
+	end
+	return Ability.MaxStack(self)
 end
 
 -- End Ability Modifications
@@ -2454,7 +2482,7 @@ end
 APL[SPEC.FIRE].spells_in_flight = function(self)
 	self.hot_streak_spells_in_flight_off_gcd = 0
 	self.hot_streak_spells_in_flight = 0
-	if PhoenixFlames.known and CallOfTheSunKing.known then
+	if PhoenixFlames.known and (CallOfTheSunKing.known or Combustion:Up()) then
 		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + PhoenixFlames:Traveling()
 	end
 	if Combustion:Up() or (Firestarter.known and Firestarter:Up()) then
@@ -2559,7 +2587,7 @@ actions.combustion_phase+=/pyroblast,if=buff.fury_of_the_sun_king.up&buff.fury_o
 actions.combustion_phase+=/phoenix_flames,if=talent.phoenix_reborn&buff.heating_up.react+hot_streak_spells_in_flight<2&buff.flames_fury.up
 actions.combustion_phase+=/scorch,if=improved_scorch.active&(debuff.improved_scorch.remains<4*gcd.max)&active_enemies<variable.combustion_flamestrike
 actions.combustion_phase+=/fireball,if=buff.combustion.remains>cast_time&buff.flame_accelerant.react
-actions.combustion_phase+=/phoenix_flames,if=!talent.call_of_the_sun_king&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2
+actions.combustion_phase+=/phoenix_flames,if=(!talent.call_of_the_sun_king|charges_fractional>2.5)&travel_time<buff.combustion.remains&buff.heating_up.react+hot_streak_spells_in_flight<2
 actions.combustion_phase+=/scorch,if=buff.combustion.remains>cast_time&cast_time>=gcd.max
 actions.combustion_phase+=/fireball,if=buff.combustion.remains>cast_time
 actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active_enemies>1
@@ -2589,6 +2617,9 @@ actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active
 			return Scorch
 		end
 	end
+	if SpellfireSpheres.known and PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
+		return PhoenixFlames
+	end
 	if FireBlast:Usable() and not self.fire_blast_pooling and (not ImprovedScorch:Active() or Scorch:Casting() or ImprovedScorch:Remains() > (4 * Player.gcd)) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and Combustion:Up() and Hyperthermia:Down() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 then
 		UseExtra(FireBlast, true)
 	end
@@ -2617,7 +2648,7 @@ actions.combustion_phase+=/living_bomb,if=buff.combustion.remains<gcd.max&active
 	if FlameAccelerant.known and Fireball:Usable() and Combustion:Remains() > Fireball:CastTime() and FlameAccelerant:Up() then
 		return Fireball
 	end
-	if not CallOfTheSunKing.known and PhoenixFlames:Usable() and PhoenixFlames:TravelTime() < Combustion:Remains() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
+	if PhoenixFlames:Usable() and (not CallOfTheSunKing.known or PhoenixFlames:ChargesFractional() >= 2.5) and PhoenixFlames:TravelTime() < Combustion:Remains() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
 		return PhoenixFlames
 	end
 	if Scorch:Usable() and Combustion:Remains() > Scorch:CastTime() and Scorch:CastTime() >= Player.gcd then
