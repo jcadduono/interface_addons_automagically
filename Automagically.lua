@@ -549,7 +549,7 @@ function Ability:Usable(seconds)
 	return self:Ready(seconds)
 end
 
-function Ability:Remains()
+function Ability:Remains(offGCD)
 	if self:Casting() or self:Traveling() > 0 then
 		return self:Duration()
 	end
@@ -562,7 +562,7 @@ function Ability:Remains()
 			if aura.expirationTime == 0 then
 				return 600 -- infinite duration
 			end
-			return max(0, aura.expirationTime - Player.ctime - (self.off_gcd and 0 or Player.execute_remains))
+			return max(0, aura.expirationTime - Player.ctime - (offGCD and 0 or Player.execute_remains))
 		end
 	end
 	return 0
@@ -2482,15 +2482,17 @@ end
 APL[SPEC.FIRE].spells_in_flight = function(self)
 	self.hot_streak_spells_in_flight_off_gcd = 0
 	self.hot_streak_spells_in_flight = 0
-	if PhoenixFlames.known and (CallOfTheSunKing.known or Combustion:Up()) then
+	if PhoenixFlames:Traveling() > 0 and (CallOfTheSunKing.known or Combustion:Up(true)) then
 		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + PhoenixFlames:Traveling()
 	end
-	if Combustion:Up() or (Firestarter.known and Firestarter:Up()) then
-		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd  + Fireball:Traveling(true) + Pyroblast:Traveling(true)
-		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + ((Fireball:Casting() or Pyroblast:Casting()) and 1 or 0)
-	elseif Hyperthermia.known and Hyperthermia:Up() then
+	if Fireball:Traveling(true) > 0 and Combustion:Up(true) then
+		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + Fireball:Traveling(true)
+	end
+	if Pyroblast:Traveling(true) > 0 and (Combustion:Up(true) or (Hyperthermia.known and Hyperthermia:Up())) then
 		self.hot_streak_spells_in_flight_off_gcd = self.hot_streak_spells_in_flight_off_gcd + Pyroblast:Traveling(true)
-		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + (Pyroblast:Casting() and 1 or 0)
+	end
+	if (Fireball:Casting() or Pyroblast:Casting()) and (Combustion:Up() or (Firestarter.known and Firestarter:Up())) then
+		self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + 1
 	end
 	self.hot_streak_spells_in_flight = self.hot_streak_spells_in_flight + self.hot_streak_spells_in_flight_off_gcd
 end
