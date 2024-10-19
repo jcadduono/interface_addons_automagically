@@ -1191,6 +1191,7 @@ local Ignite = Ability:Add(12846, false, true, 12654)
 Ignite.buff_duration = 9
 Ignite.tick_interval = 1
 Ignite:AutoAoe(false, 'apply')
+local ImprovedCombustion = Ability:Add(383967, true, true)
 local ImprovedScorch = Ability:Add(383604, false, true, 383608)
 ImprovedScorch.buff_duration = 12
 ImprovedScorch.max_stack = 2
@@ -1338,7 +1339,10 @@ Icicles.buff_duration = 60
 local WintersChill = Ability:Add(228358, false, true)
 WintersChill.buff_duration = 6
 -- Hero talents
+local InvocationArcanePhoenix = Ability:Add(448658, true, true)
+local MemoryOfAlar = Ability:Add(449619, true, true)
 local Rondurmancy = Ability:Add(449596, true, true)
+local SavorTheMoment = Ability:Add(449412, true, true)
 local SpellfireSpheres = Ability:Add(448601, true, true, 448604)
 SpellfireSpheres.max_stack = 3
 -- Tier set bonuses
@@ -1408,7 +1412,7 @@ function SummonedPet:Add(unitId, duration, summonSpell)
 	return pet
 end
 
-function SummonedPet:Remains(initial)
+function SummonedPet:Remains(initial, offGCD)
 	if self.summon_spell and self.summon_spell.summon_count > 0 and self.summon_spell:Casting() then
 		return self.duration
 	end
@@ -1418,7 +1422,7 @@ function SummonedPet:Remains(initial)
 			expires_max = unit.expires
 		end
 	end
-	return max(0, expires_max - Player.time - Player.execute_remains)
+	return max(0, expires_max - Player.time - (offGCD and 0 or Player.execute_remains))
 end
 
 function SummonedPet:Up(...)
@@ -1483,7 +1487,7 @@ function SummonedPet:Clear()
 end
 
 -- Summoned Pets
-
+Pet.ArcanePhoenix = SummonedPet:Add(223453, 10, InvocationArcanePhoenix)
 
 -- End Summoned Pets
 
@@ -1864,6 +1868,9 @@ function Player:Update()
 		end
 		self.arcane_charges.current = clamp(self.arcane_charges.current, 0, self.arcane_charges.max)
 	end
+	if Pet.ArcanePhoenix.known then
+		Player.phoenix_remains = Pet.ArcanePhoenix:Remains()
+	end
 	speed, max_speed = GetUnitSpeed('player')
 	self.moving = speed ~= 0
 	self.movement_speed = max_speed / 7 * 100
@@ -2233,6 +2240,17 @@ function PhoenixFlames:Free()
 	return PhoenixReborn.known and FlamesFury:Up()
 end
 
+function Combustion:Duration()
+	local duration = Ability.Duration(self)
+	if ImprovedCombustion.known then
+		duration = duration + 2
+	end
+	if SavorTheMoment.known then
+		duration = duration + min(2.5, SpellfireSpheres:Stack() * 0.5)
+	end
+	return duration
+end
+
 function Combustion:Remains(offGCD)
 	local remains = Ability.Remains(self, offGCD)
 	if not offGCD and SunKingsBlessing.known and Ability.Remains(FuryOfTheSunKing) > 0 and (Pyroblast:Casting() or Flamestrike:Casting()) then
@@ -2244,6 +2262,13 @@ end
 function FuryOfTheSunKing:Remains(offGCD)
 	if not offGCD and (Pyroblast:Casting() or Flamestrike:Casting()) then
 		return 0
+	end
+	return Ability.Remains(self, offGCD)
+end
+
+function Hyperthermia:Remains(offGCD)
+	if not offGCD and MemoryOfAlar.known and InvocationArcanePhoenix.known and Pet.ArcanePhoenix:Expiring() > 0 then
+		return self:Duration()
 	end
 	return Ability.Remains(self, offGCD)
 end
@@ -2305,7 +2330,11 @@ end
 
 -- Start Summoned Pet Modifications
 
-
+function Pet.ArcanePhoenix:AddUnit(...)
+	local unit = SummonedPet.AddUnit(self, ...)
+	unit.expires = unit.spawn + Combustion:Duration()
+	return unit
+end
 
 -- End Summoned Pet Modifications
 
@@ -3269,7 +3298,7 @@ end
 
 function UI:UpdateDisplay()
 	Timer.display = 0
-	local border, dim, dim_cd, text_center, text_tr, text_cd
+	local border, dim, dim_cd, text_center, text_tl, text_cd
 	local channel = Player.channel
 
 	if Opt.dimmer then
@@ -3324,7 +3353,7 @@ function UI:UpdateDisplay()
 		end
 	end
 	if Player.major_cd_remains > 0 then
-		text_tr = format('%.1fs', Player.major_cd_remains)
+		text_center = format('%.1fs', Player.major_cd_remains)
 	end
 	if border ~= amagicPanel.border.overlay then
 		amagicPanel.border.overlay = border
@@ -3333,10 +3362,13 @@ function UI:UpdateDisplay()
 	if Combustion.known and APL[SPEC.FIRE].combustion_in_cast then
 		text_center = 'COMBUST\nCAST'
 	end
+	if Pet.ArcanePhoenix.known and Player.phoenix_remains > 0 then
+		text_tl = format('%.1fs', Player.phoenix_remains)
+	end
 
 	amagicPanel.dimmer:SetShown(dim)
 	amagicPanel.text.center:SetText(text_center)
-	amagicPanel.text.tr:SetText(text_tr)
+	amagicPanel.text.tl:SetText(text_tl)
 	--amagicPanel.text.bl:SetText(format('%.1fs', Target.timeToDie))
 	amagicCooldownPanel.text:SetText(text_cd)
 	amagicCooldownPanel.dimmer:SetShown(dim_cd)
