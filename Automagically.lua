@@ -2178,21 +2178,6 @@ function Icicles:Stack()
 	return min(5, count)
 end
 
-function FeelTheBurn:Remains()
-	if PhoenixFlames.known and PhoenixFlames:Traveling() > 0 then
-		return self:Duration()
-	end
-	return Ability.Remains(self)
-end
-
-function FeelTheBurn:Stack()
-	local stack = Ability.Stack(self)
-	if PhoenixFlames.known then
-		stack = stack + PhoenixFlames:Traveling()
-	end
-	return clamp(stack, 0, self:MaxStack())
-end
-
 function Firestarter:Remains()
 	if not self.known or Target.health.pct <= 90 then
 		return 0
