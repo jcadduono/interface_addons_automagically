@@ -511,6 +511,7 @@ function Ability:Add(spellId, buff, player, spellId2)
 		icon = false,
 		requires_charge = false,
 		requires_react = false,
+		requires_pet = false,
 		triggers_gcd = true,
 		hasted_duration = false,
 		hasted_cooldown = false,
@@ -529,7 +530,11 @@ function Ability:Add(spellId, buff, player, spellId2)
 		aura_target = buff and 'player' or 'target',
 		aura_filter = (buff and 'HELPFUL' or 'HARMFUL') .. (player and '|PLAYER' or ''),
 		keybinds = {},
+		pet_spell = player == 'pet',
 	}
+	if ability.pet_spell then
+		ability.aura_target = buff and 'pet' or 'target'
+	end
 	setmetatable(ability, self)
 	Abilities.all[#Abilities.all + 1] = ability
 	return ability
@@ -554,7 +559,7 @@ function Ability:Usable(seconds)
 	if not self.known then
 		return false
 	end
-	if self.requires_pet and not Pet.active then
+	if (self.requires_pet or self.pet_spell) and not Pet.active then
 		return false
 	end
 	if self:ManaCost() > Player.mana.current then
@@ -917,11 +922,11 @@ function Ability:CastSuccess(dstGUID)
 	if self.ignore_cast then
 		return
 	end
-	if self.requires_pet or self.pet_spell then
+	if self.requires_pet then
 		Pet.stuck = false
-		if self.pet_spell then
-			return
-		end
+	end
+	if self.pet_spell then
+		return
 	end
 	Player.last_ability = self
 	if self.triggers_gcd then
@@ -1522,11 +1527,13 @@ function SummonedPet:AddUnit(guid)
 		expires = Player.time + self:Duration(),
 	}
 	self.active_units[guid] = unit
+	--log(format('%.3f SUMMONED PET ADDED %s EXPIRES %.3f', unit.spawn, guid, unit.expires))
 	return unit
 end
 
 function SummonedPet:RemoveUnit(guid)
 	if self.active_units[guid] then
+		--log(format('%.3f SUMMONED PET REMOVED %s AFTER %.3fs EXPECTED %.3fs', Player.time, guid, Player.time - self.active_units[guid], self.active_units[guid].expires))
 		self.active_units[guid] = nil
 	end
 end
@@ -1771,30 +1778,32 @@ function Player:UpdateKnown()
 	local info, node
 	local configId = C_ClassTalents.GetActiveConfigID()
 	for _, ability in next, Abilities.all do
-		ability.known = false
-		ability.rank = 0
-		for _, spellId in next, ability.spellIds do
-			info = GetSpellInfo(spellId)
-			if info then
-				ability.spellId, ability.name, ability.icon = info.spellID, info.name, info.originalIconID
+		if not ability.pet_spell then
+			ability.known = false
+			ability.rank = 0
+			for _, spellId in next, ability.spellIds do
+				info = GetSpellInfo(spellId)
+				if info then
+					ability.spellId, ability.name, ability.icon = info.spellID, info.name, info.originalIconID
+				end
+				if IsPlayerSpell(spellId) or (ability.learn_spellId and IsPlayerSpell(ability.learn_spellId)) then
+					ability.known = true
+					break
+				end
 			end
-			if IsPlayerSpell(spellId) or (ability.learn_spellId and IsPlayerSpell(ability.learn_spellId)) then
-				ability.known = true
-				break
+			if ability.bonus_id then -- used for checking enchants and crafted effects
+				ability.known = self:BonusIdEquipped(ability.bonus_id)
 			end
-		end
-		if ability.bonus_id then -- used for checking enchants and crafted effects
-			ability.known = self:BonusIdEquipped(ability.bonus_id)
-		end
-		if ability.talent_node and configId then
-			node = C_Traits.GetNodeInfo(configId, ability.talent_node)
-			if node then
-				ability.rank = node.activeRank
-				ability.known = ability.rank > 0
+			if ability.talent_node and configId then
+				node = C_Traits.GetNodeInfo(configId, ability.talent_node)
+				if node then
+					ability.rank = node.activeRank
+					ability.known = ability.rank > 0
+				end
 			end
-		end
-		if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.check_usable and not IsSpellUsable(ability.spellId)) then
-			ability.known = false -- spell is locked, do not mark as known
+			if C_LevelLink.IsSpellLocked(ability.spellId) or (ability.check_usable and not IsSpellUsable(ability.spellId)) then
+				ability.known = false -- spell is locked, do not mark as known
+			end
 		end
 	end
 
@@ -2002,6 +2011,26 @@ end
 -- End Player Functions
 
 -- Start Pet Functions
+
+function Pet:UpdateKnown()
+	local info
+	for _, ability in next, Abilities.all do
+		if ability.pet_spell then
+			ability.known = false
+			ability.rank = 0
+			for _, spellId in next, ability.spellIds do
+				info = GetSpellInfo(spellId)
+				ability.spellId, ability.name, ability.icon = info.spellID, info.name, info.originalIconID
+				if IsSpellKnown(spellId, true) then
+					ability.known = true
+					break
+				end
+			end
+		end
+	end
+
+	Abilities:Update()
+end
 
 function Pet:Update()
 	self.guid = UnitGUID('pet')
@@ -3799,7 +3828,13 @@ end
 --local UnknownSpell = {}
 
 CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellSchool, missType, overCap, powerType)
-	if not (srcGUID == Player.guid or srcGUID == Pet.guid) then
+	if srcGUID == Pet.guid then
+		if Pet.stuck and (event == 'SPELL_CAST_SUCCESS' or event == 'SPELL_DAMAGE' or event == 'SWING_DAMAGE') then
+			Pet.stuck = false
+		elseif not Pet.stuck and event == 'SPELL_CAST_FAILED' and missType == 'No path available' then
+			Pet.stuck = true
+		end
+	elseif srcGUID ~= Player.guid then
 		local uid = ToUID(srcGUID)
 		if uid then
 			local pet = SummonedPets.byUnitId[uid]
@@ -3820,14 +3855,6 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			end
 		end
 		return
-	end
-
-	if srcGUID == Pet.guid then
-		if Pet.stuck and (event == 'SPELL_CAST_SUCCESS' or event == 'SPELL_DAMAGE' or event == 'SWING_DAMAGE') then
-			Pet.stuck = false
-		elseif not Pet.stuck and event == 'SPELL_CAST_FAILED' and missType == 'No path available' then
-			Pet.stuck = true
-		end
 	end
 
 	local ability = spellId and Abilities.bySpellId[spellId]
@@ -3863,7 +3890,7 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 			ability:RemoveAura(dstGUID)
 		end
 	end
-	if dstGUID == Player.guid then
+	if dstGUID == Player.guid or dstGUID == Pet.guid then
 		if event == 'SPELL_AURA_APPLIED' or event == 'SPELL_AURA_REFRESH' then
 			ability.last_gained = Player.time
 		end
@@ -3956,6 +3983,7 @@ function Events:UNIT_PET(unitId)
 	if unitId ~= 'player' then
 		return
 	end
+	Pet:UpdateKnown()
 	Pet:Update()
 end
 
