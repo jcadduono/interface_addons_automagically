@@ -1633,6 +1633,9 @@ end
 -- Inventory Items
 local Healthstone = InventoryItem:Add(5512)
 Healthstone.max_charges = 3
+local HyperthreadWristwraps = InventoryItem:Add(168989)
+HyperthreadWristwraps.cooldown_duration = 120
+HyperthreadWristwraps.casts = {}
 -- Equipment
 local Trinket1 = InventoryItem:Add(0)
 local Trinket2 = InventoryItem:Add(0)
@@ -1838,6 +1841,9 @@ function Player:UpdateKnown()
 		Frostbolt.known = false
 		Fireball.known = false
 		Bolt = FrostfireBolt
+	end
+	if MemoryOfAlar.known then
+		Hyperthermia.known = true
 	end
 
 	Abilities:Update()
@@ -2435,6 +2441,24 @@ function Meteor:CooldownDuration()
 	return duration
 end
 
+function HyperthreadWristwraps:Cast(ability)
+	if ability.ignore_cast or ability.pet_spell or not ability.spellId then
+		return
+	end
+	self.casts[3] = nil
+	table.insert(self.casts, 1, ability)
+end
+
+function HyperthreadWristwraps:Casts(ability)
+	local count = 0
+	for i = 1, #self.casts do
+		if self.casts[i] == ability then
+			count = count + 1
+		end
+	end
+	return count
+end
+
 -- End Ability Modifications
 
 -- Start Summoned Pet Modifications
@@ -2554,6 +2578,9 @@ actions+=/scorch,if=buff.combustion.down
 		(Target.boss and Target.timeToDie < 25 and (Combustion:Up() or not Combustion:Ready(10)))
 	) then
 		UseCooldown(Trinket.SpymastersWeb)
+	end
+	if self.use_cds and self.in_combust and HyperthreadWristwraps:Usable() and FireBlast:Charges() == 0 and HyperthreadWristwraps:Casts(FireBlast) >= 2 then
+		UseCooldown(HyperthreadWristwraps)
 	end
 	self.fire_blast_pooling = not self.in_combust_off_gcd and (FireBlast:ChargesFractional() + ((self.time_to_combustion + (self.shifting_power_before_combustion and 12 or 0)) / FireBlast:CooldownDuration()) - 1) < (FireBlast:MaxCharges() + (self.overpool_fire_blasts / FireBlast:CooldownDuration()) - (Combustion:Duration() / FireBlast:CooldownDuration()) % 1) and (not Target.boss or self.time_to_combustion < Target.timeToDie)
 	if Combustion.known and (self.time_to_combustion <= 0 or self.in_combust or (self.time_to_combustion < self.combustion_precast_time and Combustion:Ready(self.combustion_precast_time))) then
@@ -3873,6 +3900,9 @@ CombatEvent.SPELL = function(event, srcGUID, dstGUID, spellId, spellName, spellS
 
 	UI:UpdateCombatWithin(0.05)
 	if event == 'SPELL_CAST_SUCCESS' then
+		if HyperthreadWristwraps:Equipped() then
+			HyperthreadWristwraps:Cast(ability)
+		end
 		return ability:CastSuccess(dstGUID)
 	elseif event == 'SPELL_CAST_START' then
 		return ability.CastStart and ability:CastStart(dstGUID)
