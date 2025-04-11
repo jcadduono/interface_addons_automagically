@@ -1962,6 +1962,9 @@ function Player:Update()
 		end
 		self.arcane_charges.current = clamp(self.arcane_charges.current, 0, self.arcane_charges.max)
 	end
+	if FireBlast.known then
+		Player.fb_charges = FireBlast:ChargesFractional()
+	end
 	if Pet.ArcanePhoenix.known then
 		Player.phoenix_remains = Pet.ArcanePhoenix:Remains()
 	end
@@ -2582,7 +2585,7 @@ actions+=/scorch,if=buff.combustion.down
 	if self.use_cds and self.in_combust and HyperthreadWristwraps:Usable() and FireBlast:Charges() == 0 and HyperthreadWristwraps:Casts(FireBlast) >= 2 then
 		UseCooldown(HyperthreadWristwraps)
 	end
-	self.fire_blast_pooling = not self.in_combust_off_gcd and (FireBlast:ChargesFractional() + ((self.time_to_combustion + (self.shifting_power_before_combustion and 12 or 0)) / FireBlast:CooldownDuration()) - 1) < (FireBlast:MaxCharges() + (self.overpool_fire_blasts / FireBlast:CooldownDuration()) - (Combustion:Duration() / FireBlast:CooldownDuration()) % 1) and (not Target.boss or self.time_to_combustion < Target.timeToDie)
+	self.fire_blast_pooling = not self.in_combust_off_gcd and (Player.fb_charges + ((self.time_to_combustion + (self.shifting_power_before_combustion and 12 or 0)) / FireBlast:CooldownDuration()) - 1) < (FireBlast:MaxCharges() + (self.overpool_fire_blasts / FireBlast:CooldownDuration()) - (Combustion:Duration() / FireBlast:CooldownDuration()) % 1) and (not Target.boss or self.time_to_combustion < Target.timeToDie)
 	if Combustion.known and (self.time_to_combustion <= 0 or self.in_combust or (self.time_to_combustion < self.combustion_precast_time and Combustion:Ready(self.combustion_precast_time))) then
 		local apl = self:combustion_phase()
 		if apl then return apl end
@@ -2595,7 +2598,7 @@ actions+=/scorch,if=buff.combustion.down
 	end
 	self.phoenix_pooling = not CallOfTheSunKing.known and (SunKingsBlessing.known or ((self.time_to_combustion + Combustion:Duration() - 5) < (PhoenixFlames:FullRechargeTime() + PhoenixFlames:CooldownDuration() - (self.shifting_power_before_combustion and 12 or 0))) and (Target.boss and self.time_to_combustion < Target.timeToDie))
 	if FireBlast:Usable() and not self.fire_blast_pooling and self.time_to_combustion > 0 and Player.enemies >= self.hard_cast_flamestrike and Firestarter:Down() and HotStreak:Down() and (
-		FireBlast:ChargesFractional() >= 2 or
+		Player.fb_charges >= 2 or
 		(HeatingUp:Up() and Flamestrike:Casting() and Player.execute_remains < 0.5)
 	) then
 		UseExtra(FireBlast, true)
@@ -2806,7 +2809,7 @@ actions.combustion_phase+=/fireball
 	if SpellfireSpheres.known and PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and HeatingUp:Up() then
 		return PhoenixFlames
 	end
-	if FireBlast:Usable() and not self.fire_blast_pooling and (not ImprovedScorch:Active() or Scorch:Casting() or ImprovedScorch:Remains() > (4 * Player.gcd)) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and self.in_combust_off_gcd and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 and (not self.TA_combust or SunKingsBlessing.known or FireBlast:ChargesFractional() > 2.5) then
+	if FireBlast:Usable() and not self.fire_blast_pooling and (not ImprovedScorch:Active() or Scorch:Casting() or ImprovedScorch:Remains() > (4 * Player.gcd)) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and self.in_combust_off_gcd and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 and (not self.TA_combust or SunKingsBlessing.known or Player.fb_charges > 2.5) then
 		UseExtra(FireBlast, true)
 	end
 	if Flamestrike:Usable() and (Player.enemies >= self.hot_streak_flamestrike or (MajestyOfThePhoenix.known and Player.enemies >= 2 and MajestyOfThePhoenix:Stack() >= MajestyOfThePhoenix:MaxStack())) and (HotStreak:Up() or Hyperthermia:Up()) then
@@ -2923,7 +2926,7 @@ actions.standard_rotation+=/fireball
 		)) or
 		(((not self.fire_blast_pooling and UnleashedInferno.known) or SpontaneousCombustion.known) and HeatingUp:Up() and (
 			(self.hot_streak_spells_in_flight_off_gcd < 1 and (PhoenixFlames:Previous() or Scorch:Previous())) or
-			FireBlast:ChargesFractional() > (Player:BloodlustActive() and 1.5 or 2.5) or
+			Player.fb_charges > (Player:BloodlustActive() and 1.5 or 2.5) or
 			(FeelTheBurn.known and FeelTheBurn:Up() and FeelTheBurn:Remains() < 0.5) or
 			(FireBlast:FullRechargeTime() * (ShiftingPower:Ready() and 0.5 or 1)) < Hyperthermia:Duration()
 		))
@@ -3657,8 +3660,11 @@ function UI:UpdateDisplay()
 	if Combustion.known and APL[SPEC.FIRE].combustion_in_cast then
 		text_center = 'COMBUST\nCAST'
 	end
+	if FireBlast.known then
+		text_tl = format('%.1f', Player.fb_charges)
+	end
 	if Pet.ArcanePhoenix.known and Player.phoenix_remains > 0 then
-		text_tl = format('%.1fs', Player.phoenix_remains)
+		text_bl = format('%.1fs', Player.phoenix_remains)
 	end
 
 	amagicPanel.dimmer:SetShown(dim)
