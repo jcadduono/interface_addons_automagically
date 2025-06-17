@@ -3661,7 +3661,7 @@ function UI:UpdateDisplay()
 		text_center = 'COMBUST\nCAST'
 	end
 	if FireBlast.known then
-		text_tl = format('%.1f', Player.fb_charges)
+		text_tl = format('|cFF%s%.1f', (Player.fb_charges < 1 and 'FF0000') or (Player.fb_charges < 2.5 and 'FFFD00') or '00FF00', Player.fb_charges)
 	end
 	if Pet.ArcanePhoenix.known and Player.phoenix_remains > 0 then
 		text_bl = format('%.1fs', Player.phoenix_remains)
