@@ -2473,6 +2473,13 @@ function Scorch:Free()
 	return HeatShimmer.known and HeatShimmer:Up()
 end
 
+function HeatShimmer:Remains()
+	if Scorch:Casting() then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
 function HeatingUp:Remains()
 	if (
 		(Scorch:Casting() and Scorch:Execute()) or
