@@ -288,7 +288,9 @@ local Player = {
 		last_taken = 0,
 	},
 	set_bonus = {
-		t33 = 0, -- Sparks of Violet Rebirth
+		tww1 = 0, -- Sparks of Violet Rebirth
+		tww2 = 0, -- Jewels of the Aspectral Emissary
+		tww3 = 0, -- Augur's Ephemeral Plumage
 	},
 	previous_gcd = {},-- list of previous GCD abilities
 	item_use_blacklist = { -- list of item IDs with on-use effects we should mark unusable
@@ -536,6 +538,7 @@ function Ability:Add(spellId, buff, player, spellId2)
 		known = false,
 		rank = 0,
 		mana_cost = 0,
+		arcane_charge_cost = 0,
 		cooldown_duration = 0,
 		buff_duration = 0,
 		tick_interval = 0,
@@ -574,6 +577,9 @@ end
 
 function Ability:Usable(seconds)
 	if not self.known then
+		return false
+	end
+	if self.Available and not self:Available(seconds) then
 		return false
 	end
 	if (self.requires_pet or self.pet_spell) and not Pet.active then
@@ -1153,55 +1159,91 @@ Spellsteal.mana_cost = 21
 
 ---- Arcane
 ------ Talents
+local AetherAttunement = Ability:Add(453600, true, true, 453601)
+AetherAttunement.buff_duration = 30
 local Amplification = Ability:Add(236628, false, true)
 local ArcaneBarrage = Ability:Add(44425, false, true)
-ArcaneBarrage.cooldown_duration = 3
-ArcaneBarrage.hasted_cooldown = true
-ArcaneBarrage:SetVelocity(25)
+ArcaneBarrage:SetVelocity(24)
 ArcaneBarrage:AutoAoe()
 local ArcaneBlast = Ability:Add(30451, false, true)
 ArcaneBlast.mana_cost = 2.75
 ArcaneBlast.arcane_charge_gain = 1
 ArcaneBlast.triggers_combat = true
+local ArcaneBombardment = Ability:Add(384581, false, true)
+local ArcingCleave = Ability:Add(231564, false, true)
+local ArcaneDebilitation = Ability:Add(453598, false, true, 453599)
+ArcaneDebilitation.buff_duration = 6
+ArcaneDebilitation.max_stack = 50
 local ArcaneFamiliar = Ability:Add(205022, true, true, 210126)
 ArcaneFamiliar.buff_duration = 3600
-ArcaneFamiliar.cooldown_duration = 10
+local ArcaneHarmony = Ability:Add(384452, true, true, 384455)
+ArcaneHarmony.buff_duration = 3600
+ArcaneHarmony.max_stack = 20
 local ArcaneMissiles = Ability:Add(5143, false, true, 7268)
-ArcaneMissiles.mana_cost = 15
+ArcaneMissiles.buff_duration = 2.5
+ArcaneMissiles.tick_interval = 0.625
 ArcaneMissiles:SetVelocity(50)
+ArcaneMissiles:AutoAoe()
 local ArcaneOrb = Ability:Add(153626, false, true, 153640)
 ArcaneOrb.mana_cost = 1
 ArcaneOrb.cooldown_duration = 20
 ArcaneOrb:AutoAoe()
-local ArcanePower = Ability:Add(12042, true, true)
-ArcanePower.buff_duration = 10
-ArcanePower.cooldown_duration = 90
+local ArcaneSurge = Ability:Add(365350, false, true)
+ArcaneSurge.cooldown_duration = 90
+ArcaneSurge.buff = Ability:Add(365362, true, true)
+ArcaneSurge.buff.buff_duration = 15
+ArcaneSurge.triggers_combat = true
+local ArcaneTempo = Ability:Add(383980, true, true, 383997)
+ArcaneTempo.buff_duration = 12
+ArcaneTempo.max_stack = 5
 local Evocation = Ability:Add(12051, true, true)
-Evocation.buff_duration = 6
+Evocation.buff_duration = 3
 Evocation.cooldown_duration = 90
-local NetherTempest = Ability:Add(114923, false, true, 114954)
-NetherTempest.mana_cost = 1.5
-NetherTempest.buff_duration = 12
-NetherTempest.tick_interval = 1
-NetherTempest.hasted_ticks = true
-NetherTempest:AutoAoe()
+Evocation.tick_interval = 0.5
+local HighVoltage = Ability:Add(461248, true, true, 461525)
+HighVoltage.buff_duration = 3600
+HighVoltage.max_stack = 20
+local ImprovedClearcasting = Ability:Add(321420, false, true)
+local Intuition = Ability:Add(1223798, true, true, 1223797)
+Intuition.buff_duration = 5
+Intuition.max_stack = 1
+local Leydrinker = Ability:Add(452196, true, true, 453758)
+Leydrinker.buff_duration = 30
+Leydrinker.max_stack = 1
+local MagisSpark = Ability:Add(454016, false, true, 450004)
+MagisSpark.buff_duration = 12
+MagisSpark.ArcaneBlast = Ability:Add(453911, false, true)
+MagisSpark.ArcaneBlast.buff_duration = 12
+local NetherPrecision = Ability:Add(383782, true, true, 383783)
+NetherPrecision.buff_duration = 10
+NetherPrecision.max_stack = 2
+local OrbBarrage = Ability:Add(384858, false, true)
 local PrismaticBarrier = Ability:Add(235450, true, true)
 PrismaticBarrier.mana_cost = 3
 PrismaticBarrier.buff_duration = 60
 PrismaticBarrier.cooldown_duration = 25
 local PresenceOfMind = Ability:Add(205025, true, true)
+PresenceOfMind.buff_duration = 3600
 PresenceOfMind.cooldown_duration = 45
+PresenceOfMind.max_stack = 2
 PresenceOfMind.triggers_gcd = false
 local Resonance = Ability:Add(205028, false, true)
-local RuleOfThrees = Ability:Add(264354, true, true, 264774)
-RuleOfThrees.buff_duration = 15
+local SiphonStorm = Ability:Add(384267, true, true)
+SiphonStorm.buff_duration = 20
+SiphonStorm.max_stack = 7
 local Slipstream = Ability:Add(236457, false, true)
 local Supernova = Ability:Add(157980, false, true)
-Supernova.cooldown_duration = 25
+Supernova.cooldown_duration = 45
 Supernova:AutoAoe()
+local TimeLoop = Ability:Add(452924, false, true)
+local TouchOfTheMagi = Ability:Add(321507, false, true, 210824)
+TouchOfTheMagi.mana_cost = 5
+TouchOfTheMagi.buff_duration = 12
+TouchOfTheMagi.cooldown_duration = 45
 ------ Procs
 local Clearcasting = Ability:Add(79684, true, true, 263725)
-Clearcasting.buff_duration = 15
+Clearcasting.buff_duration = 20
+Clearcasting.max_stack = 1
 ---- Fire
 ------ Talents
 local AlexstraszasFury = Ability:Add(235870, false, true)
@@ -1411,9 +1453,23 @@ FrostfireBolt:SetVelocity(40)
 local FrostfireEmpowerment = Ability:Add(431176, true, true, 431177)
 local IsothermicCore = Ability:Add(431095, false, true)
 ---- Spellslinger
-
+local UnerringProficiency = Ability:Add(444974, true, true)
+UnerringProficiency.IceNova = Ability:Add(444976, true, true)
+UnerringProficiency.IceNova.buff_duration = 60
+UnerringProficiency.IceNova.max_stack = 60
+UnerringProficiency.Supernova = Ability:Add(444981, true, true)
+UnerringProficiency.Supernova.buff_duration = 60
+UnerringProficiency.Supernova.max_stack = 30
 ---- Sunfury
+local ArcaneSoul = Ability:Add(451038, true, true)
+ArcaneSoul.buff_duration = 3
+local BurdenOfPower = Ability:Add(451035, true, true, 451049)
+BurdenOfPower.buff_duration = 12
+BurdenOfPower.max_stack = 1
 local InvocationArcanePhoenix = Ability:Add(448658, true, true)
+local GloriousIncandescence = Ability:Add(449394, true, true, 451073)
+GloriousIncandescence.buff_duration = 12
+GloriousIncandescence.max_stack = 1
 local MemoryOfAlar = Ability:Add(449619, true, true)
 local Rondurmancy = Ability:Add(449596, true, true)
 local SavorTheMoment = Ability:Add(449412, true, true)
@@ -1975,6 +2031,9 @@ function Player:UpdateKnown()
 	end
 
 	AlterTime.revert.known = AlterTime.known
+	ArcaneSoul.known = MemoryOfAlar.known
+	ArcaneSurge.buff.known = ArcaneSurge.known
+	SiphonStorm.known = Evocation.known
 	if LonelyWinter.known then
 		SummonWaterElemental.known = false
 	end
@@ -1996,7 +2055,7 @@ function Player:UpdateKnown()
 	end
 	Calefaction.known = PhoenixReborn.known
 	FlamesFury.known = PhoenixReborn.known
-	if Player.spec == SPEC.FIRE then
+	if self.spec == SPEC.FIRE then
 		Bolt = Fireball
 	else
 		Bolt = Frostbolt
@@ -2008,6 +2067,10 @@ function Player:UpdateKnown()
 	end
 	if MemoryOfAlar.known then
 		Hyperthermia.known = true
+	end
+	if UnerringProficiency.known then
+		UnerringProficiency.IceNova.known = self.spec == SPEC.FROST
+		UnerringProficiency.Supernova.known = self.spec == SPEC.ARCANE
 	end
 
 	Abilities:Update()
@@ -2125,8 +2188,7 @@ function Player:Update()
 			end
 		end
 		self.arcane_charges.current = clamp(self.arcane_charges.current, 0, self.arcane_charges.max)
-	end
-	if FireBlast.known then
+	elseif self.spec == SPEC.FIRE then
 		Player.fb_charges = FireBlast:ChargesFractional()
 	end
 	if Pet.ArcanePhoenix.known then
@@ -2151,7 +2213,7 @@ function Player:Update()
 	if Blizzard.known then
 		self.blizzard_remains = Blizzard:Remains()
 	end
-	self.major_cd_remains = (Combustion.known and Combustion:Remains()) or (IcyVeins.known and IcyVeins:Remains()) or (ArcanePower.known and ArcanePower:Remains()) or 0
+	self.major_cd_remains = (Combustion.known and Combustion:Remains()) or (IcyVeins.known and IcyVeins:Remains()) or (ArcaneSurge.known and ArcaneSurge:Remains()) or 0
 
 	self.main = APL[self.spec]:Main()
 
@@ -2316,21 +2378,37 @@ end
 
 -- Start Ability Modifications
 
-function Ability:ManaCost()
-	if self.mana_cost == 0 then
-		return 0
+function Clearcasting:Remains()
+	if ArcaneSurge:Casting() then
+		return self:Duration()
 	end
-	local cost = self.mana_cost / 100 * Player.mana.max
-	if ArcanePower.known and ArcanePower:Up() then
-		cost = cost - cost * 0.60
+	return Ability.Remains(self)
+end
+
+function Clearcasting:Stack()
+	local stack = Ability.Stack(self)
+	if ArcaneSurge:Casting() then
+		stack = stack + 1
 	end
-	return max(0, cost)
+	return clamp(stack, 0, self:MaxStack())
+end
+
+function Clearcasting:MaxStack()
+	local stack = self.max_stack
+	if ImprovedClearcasting.known then
+		stack = stack + 2
+	end
+	return stack
+end
+
+function ArcaneSurge.buff:Remains()
+	if ArcaneSurge:Casting() then
+		return self:Duration()
+	end
+	return Ability.Remains(self)
 end
 
 function ArcaneBlast:ManaCost()
-	if Ability.Up(RuleOfThrees) then
-		return 0
-	end
 	return Ability.ManaCost(self) * (Player.arcane_charges.current + 1)
 end
 
@@ -2341,18 +2419,37 @@ function ArcaneExplosion:ManaCost()
 	return Ability.ManaCost(self)
 end
 
-function ArcaneMissiles:ManaCost()
-	if RuleOfThrees:Up() or Clearcasting:Up() then
-		return 0
-	end
-	return Ability.ManaCost(self)
+function ArcaneMissiles:Available()
+	return Clearcasting:Up()
 end
 
-function RuleOfThrees:Remains()
+function BurdenOfPower:Remains()
 	if ArcaneBlast:Casting() then
 		return 0
 	end
 	return Ability.Remains(self)
+end
+
+function Leydrinker:Remains()
+	if ArcaneBlast:Casting() then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function NetherPrecision:Remains()
+	if ArcaneBlast:Casting() and Ability.Stack(self) <= 1 then
+		return 0
+	end
+	return Ability.Remains(self)
+end
+
+function NetherPrecision:Stack()
+	local stack = Ability.Stack(self)
+	if ArcaneBlast:Casting() then
+		stack = stack - 1
+	end
+	return clamp(stack, 0, self:MaxStack())
 end
 
 function PresenceOfMind:Cooldown()
@@ -2362,22 +2459,16 @@ function PresenceOfMind:Cooldown()
 	return Ability.Cooldown(self)
 end
 
-function Freeze:Usable(...)
-	if not Target.stunnable then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function Freeze:Available(...)
+	return Target.stunnable
 end
 
-function FrostNova:Usable(...)
-	if not Target.stunnable then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function FrostNova:Available(...)
+	return Target.stunnable
 end
 
-function TimeWarp:Usable(...)
-	return not Player:Exhausted() and Ability.Usable(self, ...)
+function TimeWarp:Available(...)
+	return not Player:Exhausted()
 end
 
 function Blizzard:Remains()
@@ -2413,11 +2504,8 @@ function GlacialSpike:Remains()
 	return Ability.Remains(self)
 end
 
-function GlacialSpike:Usable(...)
-	if Icicles:Stack() < 5 or Icicles:Remains() < self:CastTime() then
-		return false
-	end
-	return Ability.Usable(self, ...)
+function GlacialSpike:Available(...)
+	return Icicles:Stack() >= 5 and Icicles:Remains() > self:CastTime()
 end
 
 function WintersChill:Remains()
@@ -2532,7 +2620,7 @@ end
 
 function Combustion:Remains(offGCD)
 	local remains = Ability.Remains(self, offGCD)
-	if SunKingsBlessing.known and not offGCD and (Pyroblast:Casting() or Flamestrike:Casting()) and Ability.Remains(FuryOfTheSunKing) > Player.cast.time then
+	if SunKingsBlessing.known and not offGCD and (Pyroblast:Casting() or Flamestrike:Casting()) and Ability.Remains(FuryOfTheSunKing) > Player.cast.remains then
 		remains = remains + 6
 	end
 	return remains
@@ -2586,16 +2674,6 @@ end
 function Blizzard:CastSuccess(...)
 	Ability.CastSuccess(self, ...)
 	self.ground_duration = self:Duration()
-end
-
-function ArcanePower:CastSuccess(...)
-	Ability.CastSuccess(self, ...)
-	APL[SPEC.ARCANE]:toggle_burn_phase(true)
-end
-
-function Evocation:CastSuccess(...)
-	Ability.CastSuccess(self, ...)
-	APL[SPEC.ARCANE]:toggle_burn_phase(false)
 end
 
 function SpellfireSpheres:MaxStack()
@@ -2667,14 +2745,356 @@ end
 
 APL[SPEC.ARCANE].Main = function(self)
 	if Player:TimeInCombat() == 0 then
+--[[
+actions.precombat=arcane_intellect
+actions.precombat+=/snapshot_stats
+actions.precombat+=/mirror_image
+actions.precombat+=/arcane_blast,if=!talent.evocation
+actions.precombat+=/evocation,if=talent.evocation&!variable.soul_cd
+actions.precombat+=/arcane_surge,if=variable.soul_cd
+]]
+		if Opt.barrier and PrismaticBarrier:Usable() and PrismaticBarrier:Remains() < 15 then
+			UseCooldown(PrismaticBarrier)
+		end
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 300 then
 			return ArcaneIntellect
+		end
+		if Target.boss then
+			if MirrorImage:Usable() then
+				UseCooldown(MirrorImage)
+			end
+			if Evocation:Usable() and not self.soul_cd then
+				UseCooldown(Evocation)
+			end
+			if ArcaneSurge:Usable() and self.soul_cd then
+				UseCooldown(ArcaneSurge)
+			end
+			if ArcaneBlast:Usable() then
+				return ArcaneBlast
+			end
 		end
 	else
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 10 then
 			UseExtra(ArcaneIntellect)
+		elseif Opt.barrier and PrismaticBarrier:Usable() and PrismaticBarrier:Remains() < 5 and ArcaneSurge:Down() and TouchOfTheMagi:Down() then
+			UseExtra(PrismaticBarrier)
+		elseif MirrorImage:Usable() and Player:UnderAttack() then
+			UseExtra(MirrorImage)
 		end
 	end
+--[[
+actions=counterspell
+actions+=/potion,if=(buff.siphon_storm.up|(!talent.evocation&cooldown.arcane_surge.ready)|((cooldown.arcane_surge.ready|buff.arcane_surge.up)&variable.soul_cd))|fight_remains<30
+actions+=/lights_judgment,if=(buff.arcane_surge.down&debuff.touch_of_the_magi.down&buff.arcane_soul.down&buff.siphon_storm.down&active_enemies>=2)
+actions+=/berserking,if=(buff.siphon_storm.up&variable.soul_cd)|(prev_gcd.1.arcane_surge&!variable.soul_cd)
+actions+=/blood_fury,if=(buff.siphon_storm.up&variable.soul_cd)|(prev_gcd.1.arcane_surge&!variable.soul_cd)
+actions+=/fireblood,if=(buff.siphon_storm.up&variable.soul_cd)|(prev_gcd.1.arcane_surge&!variable.soul_cd)
+actions+=/ancestral_call,if=(buff.siphon_storm.up&variable.soul_cd)|(prev_gcd.1.arcane_surge&!variable.soul_cd)
+actions+=/invoke_external_buff,name=power_infusion,if=prev_gcd.1.arcane_surge
+actions+=/invoke_external_buff,name=blessing_of_autumn,if=cooldown.touch_of_the_magi.remains>5
+actions+=/use_items,if=(((!variable.soul_cd&prev_gcd.1.arcane_surge)|(variable.soul_cd&buff.siphon_storm.up&debuff.touch_of_the_magi.up))&(variable.steroid_trinket_equipped|(!variable.steroid_trinket_equipped&!variable.nonsteroid_trinket_equipped)))|(!variable.steroid_trinket_equipped&variable.nonsteroid_trinket_equipped)|(variable.nonsteroid_trinket_equipped&buff.siphon_storm.remains<10&(cooldown.evocation.remains>17|trinket.cooldown.remains>20))|fight_remains<20
+actions+=/variable,name=opener,op=set,if=debuff.touch_of_the_magi.up&variable.opener,value=0
+actions+=/arcane_barrage,if=fight_remains<2
+actions+=/call_action_list,name=cd_opener,if=!variable.soul_cd
+actions+=/call_action_list,name=cd_opener_soul,if=variable.soul_cd
+actions+=/call_action_list,name=sunfury,if=talent.spellfire_spheres
+actions+=/call_action_list,name=spellslinger,if=!talent.spellfire_spheres
+actions+=/arcane_barrage
+]]
+	self.use_cds = Target.boss or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or (ArcaneSurge.known and ArcaneSurge:Remains() > 6)
+	if self.opener and TouchOfTheMagi:Up() then
+		self.opener = 0
+	end
+	if Target.boss and ArcaneBarrage:Usable() and Target.timeToDie < 2 then
+		return ArcaneBarrage
+	end
+	if self.use_cds then
+		local apl
+		if self.soul_cd then
+			apl = self:cd_opener_soul()
+			if apl then return apl end
+		else
+			apl = self:cd_opener()
+			if apl then return apl end
+		end
+	end
+	if SpellfireSpheres.known then
+		return self:sunfury()
+	end
+	return self:spellslinger()
+end
+
+APL[SPEC.ARCANE].precombat_variables = function(self)
+--[[
+actions.precombat+=/variable,name=soul_burst,default=0,op=reset
+actions.precombat+=/variable,name=soul_cd,op=set,value=1,if=set_bonus.thewarwithin_season_3_4pc&talent.spellfire_spheres&talent.resonance&!talent.magis_spark&(active_enemies>=3)&variable.soul_burst
+actions.precombat+=/variable,name=aoe_target_count,op=reset,default=2
+actions.precombat+=/variable,name=aoe_target_count,op=set,value=9,if=!talent.arcing_cleave
+actions.precombat+=/variable,name=opener,op=set,value=1
+actions.precombat+=/variable,name=aoe_list,default=0,op=reset
+actions.precombat+=/variable,name=steroid_trinket_equipped,op=set,value=equipped.gladiators_badge|equipped.signet_of_the_priory|equipped.imperfect_ascendancy_serum|equipped.quickwick_candlestick|equipped.soulletting_ruby|equipped.funhouse_lens|equipped.house_of_cards|equipped.flarendos_pilot_light|equipped.neural_synapse_enhancer|equipped.lily_of_the_eternal_weave|equipped.sunblood_amethyst|equipped.arazs_ritual_forge|equipped.incorporeal_essencegorger
+actions.precombat+=/variable,name=nonsteroid_trinket_equipped,op=set,value=equipped.blastmaster3000|equipped.ratfang_toxin|equipped.ingenious_mana_battery|equipped.geargrinders_spare_keys|equipped.ringing_ritual_mud|equipped.goo_blin_grenade|equipped.noggenfogger_ultimate_deluxe|equipped.garbagemancers_last_resort|equipped.mad_queens_mandate|equipped.fearbreakers_echo|equipped.mereldars_toll|equipped.gooblin_grenade|equipped.perfidious_projector|equipped.chaotic_nethergate
+]]
+	self.soul_burst = false
+	self.soul_cd = Player.set_bonus.tww3 >= 4 and SpellfireSpheres.known and Resonance.known and not MagisSpark.known and Player.enemies >= 3 and self.soul_burst
+	self.aoe_target_count = ArcingCleave.known and 2 or 9
+	self.opener = Target.boss and TouchOfTheMagi:Ready()
+	self.aoe_list = 0
+	ArcaneMissiles.interrupt_if = self.channel_interrupt[1]
+end
+
+APL[SPEC.ARCANE].channel_interrupt = {
+	[1] = function() -- Arcane Missiles
+		return Player.gcd_remains == 0 and AetherAttunement:Down()
+	end,
+}
+
+APL[SPEC.ARCANE].cd_opener = function(self)
+--[[
+actions.cd_opener=touch_of_the_magi,use_off_gcd=1,if=prev_gcd.1.arcane_surge|(cooldown.arcane_surge.remains>30&cooldown.touch_of_the_magi.ready&((buff.arcane_charge.stack<4&!prev_gcd.1.arcane_barrage)|prev_gcd.1.arcane_barrage))|fight_remains<15
+actions.cd_opener+=/wait,sec=0.05,if=prev_gcd.1.arcane_surge&time-action.touch_of_the_magi.last_used<0.015,line_cd=15
+actions.cd_opener+=/arcane_blast,if=buff.presence_of_mind.up
+actions.cd_opener+=/arcane_orb,if=talent.high_voltage&variable.opener,line_cd=10
+actions.cd_opener+=/arcane_barrage,if=buff.arcane_tempo.up&cooldown.evocation.ready&buff.arcane_tempo.remains<gcd.max*5,line_cd=11
+actions.cd_opener+=/evocation,if=cooldown.arcane_surge.remains<(gcd.max*3)&cooldown.touch_of_the_magi.remains<(gcd.max*5)|fight_remains<25
+actions.cd_opener+=/arcane_missiles,if=(prev_gcd.1.evocation|prev_gcd.1.arcane_surge|variable.opener)&buff.nether_precision.down,interrupt_if=tick_time>gcd.remains&buff.aether_attunement.react=0,interrupt_immediate=1,interrupt_global=1,chain=1,line_cd=30
+actions.cd_opener+=/arcane_surge,if=cooldown.touch_of_the_magi.remains<(action.arcane_surge.execute_time+(gcd.max*(buff.arcane_charge.stack=4)))|fight_remains<25
+]]
+	if TouchOfTheMagi:Usable() and (
+		ArcaneSurge:Previous() or
+		(not ArcaneSurge:Ready(30) and (ArcaneBarrage:Previous() or Player.arcane_charges.current < 4)) or
+		(Target.boss and Target.timeToDie < 15)
+	) then
+		UseCooldown(TouchOfTheMagi)
+	end
+	if PresenceOfMind.known and ArcaneBlast:Usable() and PresenceOfMind:Up() then
+		return ArcaneBlast
+	end
+	if self.opener and HighVoltage.known and ArcaneOrb:Usable() then
+		UseCooldown(ArcaneOrb)
+	end
+	if Evocation.known and ArcaneTempo.known and ArcaneBarrage:Usable() and Evocation:Ready() and between(ArcaneTempo:Remains(), 0.1, Player.gcd * 5) then
+		return ArcaneBarrage
+	end
+	if Evocation:Usable() and (
+		not ArcaneSurge.known or
+		(ArcaneSurge:Ready(Player.gcd * 3) and TouchOfTheMagi:Ready(Player.gcd * 5)) or
+		(Target.boss and Target.timeToDie < 25)
+	) then
+		UseCooldown(Evocation)
+	end
+	if ArcaneMissiles:Usable() and (not NetherPrecision.known or NetherPrecision:Down()) and (
+		Evocation:Previous() or
+		ArcaneSurge:Previous() or
+		self.opener
+	) then
+		return ArcaneMissiles
+	end
+	if ArcaneSurge:Usable() and (
+		not TouchOfTheMagi.known or
+		TouchOfTheMagi:Ready(ArcaneSurge:CastTime() + (Player.gcd * (Player.arcane_charges.current >= 4 and 1 or 0))) or
+		(Target.boss and Target.timeToDie < 25)
+	) then
+		UseCooldown(ArcaneSurge)
+	end
+end
+
+APL[SPEC.ARCANE].cd_opener_soul = function(self)
+--[[
+actions.cd_opener_soul=arcane_surge,if=(cooldown.touch_of_the_magi.remains<15)
+actions.cd_opener_soul+=/evocation,if=buff.arcane_surge.up&(buff.arcane_surge.remains<=8.5|((buff.glorious_incandescence.up|buff.intuition.react)&buff.arcane_surge.remains<=10))
+actions.cd_opener_soul+=/touch_of_the_magi,if=(buff.arcane_surge.remains<=2.5&prev_gcd.1.arcane_barrage)|(cooldown.evocation.remains>40&cooldown.evocation.remains<60&prev_gcd.1.arcane_barrage)
+]]
+	if ArcaneSurge:Usable() and (
+		not TouchOfTheMagi.known or
+		TouchOfTheMagi:Ready(15)
+	) then
+		UseCooldown(ArcaneSurge)
+	end
+	if Evocation:Usable() and (
+		(not ArcaneSurge.known and Target.timeToDie > 8) or
+		(ArcaneSurge:Up() and ArcaneSurge:Remains() <= ((GloriousIncandescence:Up() or Intuition:Up()) and 10 or 8.5))
+	) then
+		UseCooldown(Evocation)
+	end
+	if TouchOfTheMagi:Usable() and (
+		(ArcaneBarrage:Previous() and (ArcaneSurge:Remains() <= 2.5 or between(Evocation:Cooldown(), 40, 60))) or
+		(Target.boss and Target.timeToDie < 15)
+	) then
+		UseCooldown(TouchOfTheMagi)
+	end
+end
+
+APL[SPEC.ARCANE].sunfury = function(self)
+--[[
+actions.sunfury=shifting_power,if=((buff.arcane_surge.down&buff.siphon_storm.down&debuff.touch_of_the_magi.down&cooldown.evocation.remains>15&cooldown.touch_of_the_magi.remains>10)&fight_remains>10)&buff.arcane_soul.down&(buff.intuition.react=0|(buff.intuition.react&buff.intuition.remains>cast_time))
+actions.sunfury+=/cancel_buff,name=presence_of_mind,use_off_gcd=1,if=(prev_gcd.1.arcane_blast&buff.presence_of_mind.stack=1)|active_enemies<4
+actions.sunfury+=/presence_of_mind,if=debuff.touch_of_the_magi.remains<=gcd.max&buff.nether_precision.up&active_enemies<4
+actions.sunfury+=/wait,sec=0.05,if=time-action.presence_of_mind.last_used<0.015,line_cd=15
+actions.sunfury+=/arcane_missiles,if=buff.nether_precision.down&buff.clearcasting.react&buff.arcane_soul.up&buff.arcane_soul.remains>gcd.max*(4-buff.clearcasting.react),interrupt_if=tick_time>gcd.remains,interrupt_immediate=1,interrupt_global=1,chain=1
+actions.sunfury+=/arcane_barrage,if=buff.arcane_soul.up
+actions.sunfury+=/arcane_missiles,if=buff.clearcasting.react&buff.arcane_surge.up&buff.arcane_surge.remains<gcd.max,interrupt_if=tick_time>gcd.remains,interrupt_immediate=1,interrupt_global=1,chain=1
+actions.sunfury+=/arcane_barrage,if=(buff.arcane_tempo.up&buff.arcane_tempo.remains<(gcd.max+(gcd.max*buff.nether_precision.stack=1)))|(buff.intuition.react&buff.intuition.remains<(gcd.max+(gcd.max*buff.nether_precision.stack=1)))
+actions.sunfury+=/arcane_barrage,if=(talent.orb_barrage&active_enemies>1&buff.arcane_harmony.stack>=18&((active_enemies>3&(talent.resonance|talent.high_voltage))|buff.nether_precision.down|buff.nether_precision.stack=1|(buff.nether_precision.stack=2&buff.clearcasting.react=3)))
+actions.sunfury+=/arcane_missiles,if=buff.clearcasting.react&set_bonus.thewarwithin_season_2_4pc&buff.aether_attunement.react&cooldown.touch_of_the_magi.remains<gcd.max*(3-(1.5*(active_enemies>3&(!talent.time_loop|talent.resonance)))),interrupt_if=tick_time>gcd.remains&(buff.aether_attunement.react=0|(active_enemies>3&(!talent.time_loop|talent.resonance))),interrupt_immediate=1,interrupt_global=1,chain=1
+actions.sunfury+=/arcane_barrage,if=buff.arcane_charge.stack=4&((cooldown.touch_of_the_magi.ready)|cooldown.touch_of_the_magi.remains<((travel_time+50)>?gcd.max))&!variable.soul_cd
+actions.sunfury+=/arcane_barrage,if=(cooldown.touch_of_the_magi.ready|(cooldown.touch_of_the_magi.remains<((travel_time+50)>?gcd.max)))&(buff.arcane_surge.down|(buff.arcane_surge.up&buff.arcane_surge.remains<=2.5))&variable.soul_cd
+actions.sunfury+=/arcane_blast,if=debuff.magis_spark_arcane_blast.up&buff.arcane_charge.stack=4,line_cd=2
+actions.sunfury+=/arcane_barrage,if=(talent.high_voltage&active_enemies>1&buff.arcane_charge.stack=4&buff.clearcasting.react&buff.nether_precision.stack=1)
+actions.sunfury+=/arcane_barrage,if=(talent.high_voltage&active_enemies>1&buff.arcane_charge.stack=4&buff.clearcasting.react&buff.aether_attunement.react&buff.glorious_incandescence.down&buff.intuition.down)
+actions.sunfury+=/arcane_barrage,if=(active_enemies>2&talent.orb_barrage&talent.high_voltage&debuff.magis_spark_arcane_blast.down&buff.arcane_charge.stack=4&target.health.pct<35&talent.arcane_bombardment&(buff.nether_precision.up|(buff.nether_precision.down&buff.clearcasting.stack=0)))
+actions.sunfury+=/arcane_barrage,if=(active_enemies>2|(active_enemies>1&target.health.pct<35&talent.arcane_bombardment))&cooldown.arcane_orb.remains<gcd.max&buff.arcane_charge.stack=4&cooldown.touch_of_the_magi.remains>gcd.max*6&(debuff.magis_spark_arcane_blast.down|!talent.magis_spark)&buff.nether_precision.up&(talent.high_voltage|((buff.leydrinker.down|(target.health.pct<35&talent.arcane_bombardment&active_enemies>=4&talent.resonance))&buff.nether_precision.stack=2)|(buff.nether_precision.stack=1&buff.clearcasting.react=0))
+actions.sunfury+=/arcane_missiles,if=buff.clearcasting.react&((talent.high_voltage&buff.arcane_charge.stack<4)|(buff.nether_precision.down&(buff.clearcasting.react>1|buff.spellfire_spheres.stack=6|buff.burden_of_power.up|buff.glorious_incandescence.up|(buff.intuition.react)))),interrupt_if=tick_time>gcd.remains&(buff.aether_attunement.react=0|(active_enemies>3&(!talent.time_loop|talent.resonance))),interrupt_immediate=1,interrupt_global=1,chain=1
+actions.sunfury+=/arcane_orb,if=buff.arcane_charge.stack<3
+actions.sunfury+=/arcane_barrage,if=buff.glorious_incandescence.up|buff.intuition.react
+actions.sunfury+=/presence_of_mind,if=(buff.arcane_charge.stack=3|buff.arcane_charge.stack=2)&active_enemies>=3
+actions.sunfury+=/arcane_explosion,if=buff.arcane_charge.stack<2&active_enemies>1
+actions.sunfury+=/arcane_blast
+actions.sunfury+=/arcane_barrage
+]]
+	if self.use_cds then
+		if ShiftingPower:Usable() and ArcaneSoul:Down() and (
+			ArcaneSurge:Down() and SiphonStorm:Down() and TouchOfTheMagi:Down() and (not Evocation.known or not Evocation:Ready(15)) and not TouchOfTheMagi:Ready(10)
+		) and (
+			not Intuition.known or
+			Intuition:Down() or
+			Intuition:Remains() > (4 * Player.haste_factor)
+		) then
+			UseCooldown(ShiftingPower)
+		end
+		if PresenceOfMind:Usable() and TouchOfTheMagi:Remains() <= Player.gcd and NetherPrecision:Up() and Player.enemies < 4 then
+			UseCooldown(PresenceOfMind)
+		end
+	end
+	if ArcaneSoul.known then
+		if ArcaneMissiles:Usable() and NetherPrecision:Down() and ArcaneSoul:Remains() > (Player.gcd * 3) then
+			return ArcaneMissiles
+		end
+		if ArcaneBarrage:Usable() and ArcaneSoul:Up() then
+			return ArcaneBarrage
+		end
+	end
+	if ArcaneMissiles:Usable() and between(ArcaneSurge:Remains(), 0.1, Player.gcd) then
+		return ArcaneMissiles
+	end
+	if ArcaneBarrage:Usable() and (
+		(ArcaneTempo.known and between(ArcaneTempo:Remains(), 0.1, Player.gcd * (NetherPrecision:Stack() == 1 and 2 or 1))) or
+		(Intuition.known and between(Intuition:Remains(), 0.1, Player.gcd * (NetherPrecision:Stack() == 1 and 2 or 1))) or
+		(OrbBarrage.known and ArcaneHarmony.known and Player.enemies > 1 and ArcaneHarmony:Stack() >= 18 and (
+			(Player.enemies > 3 and (Resonance.known or HighVoltage.known)) or
+			not NetherPrecision:Capped() or
+			Clearcasting:Stack() >= 3
+		))
+	) then
+		return ArcaneBarrage
+	end
+	if AetherAttunement.known and ArcaneMissiles:Usable() and Player.set_bonus.tww2 >= 4 and AetherAttunement:Up() and TouchOfTheMagi:Ready(Player.gcd * (3 - ((Player.enemies > 3 and (not TimeLoop.known or Resonance.known)) and 1.5 or 0))) then
+		return ArcaneMissiles
+	end
+	if self.use_cds and TouchOfTheMagi.known and ArcaneBarrage:Usable() and TouchOfTheMagi:Ready(Player.gcd) and (
+		(not self.soul_cd and Player.arcane_charges.current >= 4) or
+		(self.soul_cd and ArcaneSurge:Remains() <= 2.5)
+	) then
+		return ArcaneBarrage
+	end
+	if MagisSpark.known and ArcaneBlast:Usable() and not ArcaneBlast:Previous() and Player.arcane_charges.current >= 4 and MagisSpark.ArcaneBlast:Up() then
+		return ArcaneBlast
+	end
+	if ArcaneBarrage:Usable() and Player.arcane_charges.current >= 4 and (
+		(HighVoltage.known and Player.enemies > 1 and Clearcasting:Up() and (
+			NetherPrecision:Stack() == 1 or
+			(AetherAttunement.known and AetherAttunement:Up() and GloriousIncandescence:Down() and Intuition:Down())
+		)) or
+		(HighVoltage.known and ArcaneBombardment.known and OrbBarrage.known and Player.enemies > 2 and Target.health.pct < 35 and MagisSpark.ArcaneBlast:Down() and (
+			NetherPrecision:Up() or
+			Clearcasting:Down()
+		)) or
+		(ArcaneOrb:Ready(Player.gcd) and not TouchOfTheMagi:Ready(Player.gcd * 6) and NetherPrecision:Up() and (
+			Player.enemies > 2 or
+			(ArcaneBombardment.known and Player.enemies > 1 and Target.health.pct < 35)
+		) and (
+			not MagisSpark.known or
+			MagisSpark.ArcaneBlast:Down()
+		) and (
+			HighVoltage.known or
+			(NetherPrecision:Stack() == 2 and (
+				Leydrinker:Down() or
+				(ArcaneBombardment.known and Resonance.known and Target.health.pct < 35 and Player.enemies >= 4)
+			)) or
+			(NetherPrecision:Stack() == 1 and Clearcasting:Down())
+		))
+	) then
+		return ArcaneBarrage
+	end
+	if ArcaneMissiles:Usable() and (
+		(HighVoltage.known and Player.arcane_charges.current < 4) or
+		(NetherPrecision:Down() and (
+			Clearcasting:Stack() > 1 or
+			SpellfireSpheres:Stack() == 6 or
+			BurdenOfPower:Up() or
+			GloriousIncandescence:Up() or
+			Intuition:Up()
+		))
+	) then
+		return ArcaneMissiles
+	end
+	if ArcaneOrb:Usable() and Player.arcane_charges.current < 3 then
+		UseCooldown(ArcaneOrb)
+	end
+	if ArcaneBarrage:Usable() and (
+		GloriousIncandescence:Up() or
+		Intuition:Up()
+	) then
+		return ArcaneBarrage
+	end
+	if PresenceOfMind:Usable() and Player.enemies >= 3 and between(Player.arcane_charges.current, 2, 3) then
+		UseCooldown(PresenceOfMind)
+	end
+	if ArcaneExplosion:Usable() and Player.enemies > 1 and Player.arcane_charges.current < 2 then
+		UseCooldown(ArcaneExplosion)
+	end
+	if ArcaneBlast:Usable() then
+		return ArcaneBlast
+	end
+	if ArcaneBarrage:Usable() then
+		return ArcaneBarrage
+	end
+end
+
+APL[SPEC.ARCANE].spellslinger = function(self)
+--[[
+actions.spellslinger=shifting_power,if=(((((action.arcane_orb.charges=0)&cooldown.arcane_orb.remains>16)|cooldown.touch_of_the_magi.remains<20)&buff.arcane_surge.down&buff.siphon_storm.down&debuff.touch_of_the_magi.down&(buff.intuition.react=0|(buff.intuition.react&buff.intuition.remains>cast_time))&cooldown.touch_of_the_magi.remains>(12+6*gcd.max))|(prev_gcd.1.arcane_barrage&talent.shifting_shards&(buff.intuition.react=0|(buff.intuition.react&buff.intuition.remains>cast_time))&(buff.arcane_surge.up|debuff.touch_of_the_magi.up|cooldown.evocation.remains<20)))&fight_remains>10&(buff.arcane_tempo.remains>gcd.max*2.5|buff.arcane_tempo.down)
+actions.spellslinger+=/cancel_buff,name=presence_of_mind,use_off_gcd=1,if=prev_gcd.1.arcane_blast&buff.presence_of_mind.stack=1
+actions.spellslinger+=/presence_of_mind,if=debuff.touch_of_the_magi.remains<=gcd.max&buff.nether_precision.up&active_enemies<variable.aoe_target_count&!talent.unerring_proficiency
+actions.spellslinger+=/wait,sec=0.05,if=time-action.presence_of_mind.last_used<0.015,line_cd=15
+actions.spellslinger+=/supernova,if=debuff.touch_of_the_magi.remains<=gcd.max&buff.unerring_proficiency.stack=30
+actions.spellslinger+=/arcane_orb,if=buff.arcane_charge.stack<4
+actions.spellslinger+=/arcane_barrage,if=(buff.arcane_tempo.up&buff.arcane_tempo.remains<gcd.max)
+actions.spellslinger+=/arcane_missiles,if=buff.aether_attunement.react&cooldown.touch_of_the_magi.remains<gcd.max*3&buff.clearcasting.react&set_bonus.thewarwithin_season_2_4pc
+actions.spellslinger+=/arcane_barrage,if=(cooldown.touch_of_the_magi.ready|cooldown.touch_of_the_magi.remains<((travel_time+0.05)>?gcd.max))&(cooldown.arcane_surge.remains>30&cooldown.arcane_surge.remains<75)
+actions.spellslinger+=/arcane_barrage,if=buff.arcane_charge.stack=4&buff.arcane_harmony.stack>=20&set_bonus.thewarwithin_season_3_4pc
+actions.spellslinger+=/arcane_missiles,if=(buff.clearcasting.react&buff.nether_precision.down&((cooldown.touch_of_the_magi.remains>gcd.max*7&cooldown.arcane_surge.remains>gcd.max*7)|buff.clearcasting.react>1|!talent.magis_spark|(cooldown.touch_of_the_magi.remains<gcd.max*4&buff.aether_attunement.react=0)|set_bonus.thewarwithin_season_2_4pc))|(fight_remains<5&buff.clearcasting.react),interrupt_if=tick_time>gcd.remains&(buff.aether_attunement.react=0|(active_enemies>3&(!talent.time_loop|talent.resonance))),interrupt_immediate=1,interrupt_global=1,chain=1
+actions.spellslinger+=/arcane_missiles,if=talent.high_voltage&(buff.clearcasting.react>1|(buff.clearcasting.react&buff.aether_attunement.react))&buff.arcane_charge.stack<3,interrupt_if=tick_time>gcd.remains&(buff.aether_attunement.react=0|(active_enemies>3&(!talent.time_loop|talent.resonance))),interrupt_immediate=1,interrupt_global=1,chain=1
+actions.spellslinger+=/arcane_barrage,if=buff.intuition.react
+actions.spellslinger+=/arcane_blast,if=debuff.magis_spark_arcane_blast.up|buff.leydrinker.up,line_cd=2
+actions.spellslinger+=/arcane_blast,if=buff.nether_precision.up&buff.arcane_harmony.stack<=16&buff.arcane_charge.stack=4&active_enemies=1
+actions.spellslinger+=/arcane_barrage,if=mana.pct<10&buff.arcane_surge.down&(cooldown.arcane_orb.remains<gcd.max)
+actions.spellslinger+=/arcane_orb,if=active_enemies=1&(cooldown.touch_of_the_magi.remains<6|!talent.charged_orb|buff.arcane_surge.up|cooldown.arcane_orb.charges_fractional>1.5)
+actions.spellslinger+=/arcane_barrage,if=active_enemies>=2&buff.arcane_charge.stack=4&cooldown.arcane_orb.remains<gcd.max&(buff.arcane_harmony.stack<=(8+(10*!set_bonus.thewarwithin_season_3_4pc)))&(((prev_gcd.1.arcane_barrage|prev_gcd.1.arcane_orb)&buff.nether_precision.stack=1)|buff.nether_precision.stack=2|buff.nether_precision.down)
+actions.spellslinger+=/arcane_barrage,if=active_enemies>2&(buff.arcane_charge.stack=4&!set_bonus.thewarwithin_season_3_4pc)
+actions.spellslinger+=/arcane_orb,if=active_enemies>1&buff.arcane_harmony.stack<20&(buff.arcane_surge.up|buff.nether_precision.up|active_enemies>=7)&set_bonus.thewarwithin_season_3_4pc
+actions.spellslinger+=/arcane_barrage,if=talent.high_voltage&active_enemies>=2&buff.arcane_charge.stack=4&buff.aether_attunement.react&buff.clearcasting.react
+actions.spellslinger+=/arcane_orb,if=active_enemies>1&(active_enemies<3|buff.arcane_surge.up|(buff.nether_precision.up))&set_bonus.thewarwithin_season_3_4pc
+actions.spellslinger+=/arcane_barrage,if=active_enemies>1&buff.arcane_charge.stack=4&cooldown.arcane_orb.remains<gcd.max
+actions.spellslinger+=/arcane_barrage,if=talent.high_voltage&buff.arcane_charge.stack=4&buff.clearcasting.react&buff.nether_precision.stack=1
+actions.spellslinger+=/arcane_barrage,if=(active_enemies=1&(talent.orb_barrage|(target.health.pct<35&talent.arcane_bombardment))&(cooldown.arcane_orb.remains<gcd.max)&buff.arcane_charge.stack=4&(cooldown.touch_of_the_magi.remains>gcd.max*6|!talent.magis_spark)&(buff.nether_precision.down|(buff.nether_precision.stack=1&buff.clearcasting.stack=0)))&!set_bonus.thewarwithin_season_3_4pc
+actions.spellslinger+=/arcane_explosion,if=active_enemies>1&((buff.arcane_charge.stack<1&!talent.high_voltage)|(buff.arcane_charge.stack<3&(buff.clearcasting.react=0|talent.reverberate)))
+actions.spellslinger+=/arcane_explosion,if=active_enemies=1&buff.arcane_charge.stack<2&buff.clearcasting.react=0
+actions.spellslinger+=/arcane_barrage,if=(((target.health.pct<35&(debuff.touch_of_the_magi.remains<(gcd.max*1.25))&(debuff.touch_of_the_magi.remains>action.arcane_barrage.travel_time))|((buff.arcane_surge.remains<gcd.max)&buff.arcane_surge.up))&buff.arcane_charge.stack=4)&!set_bonus.thewarwithin_season_3_4pc
+actions.spellslinger+=/arcane_blast
+actions.spellslinger+=/arcane_barrage
+]]
+
 end
 
 APL[SPEC.FIRE].Main = function(self)
@@ -2871,9 +3291,9 @@ actions.combustion_timing+=/variable,use_off_gcd=1,use_while_casting=1,name=time
 	self.combustion_ready_time = not self.use_cds and 999 or Combustion:CooldownExpected()
 	self.combustion_precast_time = (Player.enemies < self.combustion_flamestrike and Bolt:CastTime() or 0) + (Player.enemies >= self.combustion_flamestrike and Flamestrike:CastTime() or 0) - self.combustion_cast_remains
 	self.time_to_combustion = max(self.combustion_ready_time, Combustion:Remains())
-	self.combustion_in_cast = self.time_to_combustion <= 0 and not self.in_combust_off_gcd and (
-		(self.hot_streak_spells_in_flight_off_gcd == 0 and ((Scorch:Casting() or Bolt:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))) or
-		(SunKingsBlessing.known and (Pyroblast:Casting() or Flamestrike:Casting()) and Ability.Remains(FuryOfTheSunKing) > Player.cast.remains)
+	self.combustion_in_cast = not self.in_combust_off_gcd and (
+		(self.time_to_combustion <= 0 and self.hot_streak_spells_in_flight_off_gcd == 0 and ((Scorch:Casting() or Bolt:Casting() or Pyroblast:Casting() or Flamestrike:Casting()) or Meteor:LandingIn(3))) or
+		(Combustion:Ready() and SunKingsBlessing.known and (Pyroblast:Casting() or Flamestrike:Casting()) and Ability.Remains(FuryOfTheSunKing) > Player.cast.remains)
 	)
 end
 
@@ -4055,7 +4475,9 @@ function Events:PLAYER_EQUIPMENT_CHANGED()
 		end
 	end
 
-	Player.set_bonus.t33 = (Player:Equipped(212090) and 1 or 0) + (Player:Equipped(212091) and 1 or 0) + (Player:Equipped(212092) and 1 or 0) + (Player:Equipped(212093) and 1 or 0) + (Player:Equipped(212095) and 1 or 0)
+	Player.set_bonus.tww1 = (Player:Equipped(212090) and 1 or 0) + (Player:Equipped(212091) and 1 or 0) + (Player:Equipped(212092) and 1 or 0) + (Player:Equipped(212093) and 1 or 0) + (Player:Equipped(212095) and 1 or 0)
+	Player.set_bonus.tww2 = (Player:Equipped(229341) and 1 or 0) + (Player:Equipped(229342) and 1 or 0) + (Player:Equipped(229343) and 1 or 0) + (Player:Equipped(229344) and 1 or 0) + (Player:Equipped(229346) and 1 or 0)
+	Player.set_bonus.tww3 = (Player:Equipped(237716) and 1 or 0) + (Player:Equipped(237717) and 1 or 0) + (Player:Equipped(237718) and 1 or 0) + (Player:Equipped(237719) and 1 or 0) + (Player:Equipped(237721) and 1 or 0)
 
 	Player:UpdateKnown()
 end
