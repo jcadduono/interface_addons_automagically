@@ -1193,6 +1193,7 @@ ArcaneSurge.cooldown_duration = 90
 ArcaneSurge.buff = Ability:Add(365362, true, true)
 ArcaneSurge.buff.buff_duration = 15
 ArcaneSurge.triggers_combat = true
+ArcaneSurge:AutoAoe()
 local ArcaneTempo = Ability:Add(383980, true, true, 383997)
 ArcaneTempo.buff_duration = 12
 ArcaneTempo.max_stack = 5
@@ -1240,6 +1241,8 @@ local TouchOfTheMagi = Ability:Add(321507, false, true, 210824)
 TouchOfTheMagi.mana_cost = 5
 TouchOfTheMagi.buff_duration = 12
 TouchOfTheMagi.cooldown_duration = 45
+TouchOfTheMagi.Explosion = Ability:Add(210833, false, true)
+TouchOfTheMagi.Explosion:AutoAoe()
 ------ Procs
 local Clearcasting = Ability:Add(79684, true, true, 263725)
 Clearcasting.buff_duration = 20
@@ -1442,51 +1445,55 @@ Icicles.buff_duration = 60
 local WintersChill = Ability:Add(228358, false, true)
 WintersChill.buff_duration = 6
 -- Hero talents
+local Hero = {}
 ---- Frostfire
-local ExcessFrost = Ability:Add(438600, true, true, 438611)
-ExcessFrost.buff_duration = 30
-local FrostfireBolt = Ability:Add(431044, false, true, 468655)
-FrostfireBolt.buff_duration = 8
-FrostfireBolt.mana_cost = 2
-FrostfireBolt.triggers_combat = true
-FrostfireBolt:SetVelocity(40)
-local FrostfireEmpowerment = Ability:Add(431176, true, true, 431177)
-local IsothermicCore = Ability:Add(431095, false, true)
+Hero.ExcessFrost = Ability:Add(438600, true, true, 438611)
+Hero.ExcessFrost.buff_duration = 30
+Hero.FrostfireBolt = Ability:Add(431044, false, true, 468655)
+Hero.FrostfireBolt.buff_duration = 8
+Hero.FrostfireBolt.mana_cost = 2
+Hero.FrostfireBolt.triggers_combat = true
+Hero.FrostfireBolt:SetVelocity(40)
+Hero.FrostfireEmpowerment = Ability:Add(431176, true, true, 431177)
+Hero.IsothermicCore = Ability:Add(431095, false, true)
 ---- Spellslinger
-local UnerringProficiency = Ability:Add(444974, true, true)
-UnerringProficiency.IceNova = Ability:Add(444976, true, true)
-UnerringProficiency.IceNova.buff_duration = 60
-UnerringProficiency.IceNova.max_stack = 60
-UnerringProficiency.Supernova = Ability:Add(444981, true, true)
-UnerringProficiency.Supernova.buff_duration = 60
-UnerringProficiency.Supernova.max_stack = 30
+Hero.UnerringProficiency = Ability:Add(444974, true, true)
+Hero.UnerringProficiency.IceNova = Ability:Add(444976, true, true)
+Hero.UnerringProficiency.IceNova.buff_duration = 60
+Hero.UnerringProficiency.IceNova.max_stack = 60
+Hero.UnerringProficiency.Supernova = Ability:Add(444981, true, true)
+Hero.UnerringProficiency.Supernova.buff_duration = 60
+Hero.UnerringProficiency.Supernova.max_stack = 30
 ---- Sunfury
-local ArcaneSoul = Ability:Add(451038, true, true)
-ArcaneSoul.buff_duration = 3
-local BurdenOfPower = Ability:Add(451035, true, true, 451049)
-BurdenOfPower.buff_duration = 12
-BurdenOfPower.max_stack = 1
-local InvocationArcanePhoenix = Ability:Add(448658, true, true)
-local GloriousIncandescence = Ability:Add(449394, true, true, 451073)
-GloriousIncandescence.buff_duration = 12
-GloriousIncandescence.max_stack = 1
-local MemoryOfAlar = Ability:Add(449619, true, true)
-local Rondurmancy = Ability:Add(449596, true, true)
-local SavorTheMoment = Ability:Add(449412, true, true)
-local SpellfireSpheres = Ability:Add(448601, true, true, 448604)
-SpellfireSpheres.max_stack = 3
+Hero.ArcaneSoul = Ability:Add(451038, true, true)
+Hero.ArcaneSoul.buff_duration = 3
+Hero.BurdenOfPower = Ability:Add(451035, true, true, 451049)
+Hero.BurdenOfPower.buff_duration = 12
+Hero.BurdenOfPower.max_stack = 1
+Hero.InvocationArcanePhoenix = Ability:Add(448658, true, true)
+Hero.GloriousIncandescence = Ability:Add(449394, true, true, 451073)
+Hero.GloriousIncandescence.buff_duration = 12
+Hero.GloriousIncandescence.max_stack = 1
+Hero.MemoryOfAlar = Ability:Add(449619, true, true)
+Hero.Rondurmancy = Ability:Add(449596, true, true)
+Hero.SavorTheMoment = Ability:Add(449412, true, true)
+Hero.SpellfireSpheres = Ability:Add(448601, true, true, 448604)
+Hero.SpellfireSpheres.max_stack = 3
 -- Tier set bonuses
 
 -- Racials
 
 -- PvP talents
-local BurstOfCold = Ability:Add(206431, true, true, 206432)
-BurstOfCold.buff_duration = 6
-local Frostbite = Ability:Add(198120, false, true, 198121)
-Frostbite.buff_duration = 4
+local PvP = {}
+PvP.BurstOfCold = Ability:Add(206431, true, true, 206432)
+PvP.BurstOfCold.buff_duration = 6
+PvP.Frostbite = Ability:Add(198120, false, true, 198121)
+PvP.Frostbite.buff_duration = 4
 -- Trinket effects
 local SpymastersReport = Ability:Add(451199, true, true) -- Spymaster's Web
 SpymastersReport.max_stack = 40
+local EtherealReaping = Ability:Add(1223417, false, true) -- Reshii Wraps proc
+EtherealReaping:AutoAoe()
 -- Class cooldowns
 local PowerInfusion = Ability:Add(10060, true)
 PowerInfusion.buff_duration = 20
@@ -1626,7 +1633,7 @@ function SummonedPet:Clear()
 end
 
 -- Summoned Pets
-Pet.ArcanePhoenix = SummonedPet:Add(223453, 10, InvocationArcanePhoenix)
+Pet.ArcanePhoenix = SummonedPet:Add(223453, 10, Hero.InvocationArcanePhoenix)
 
 -- End Summoned Pets
 
@@ -2031,9 +2038,10 @@ function Player:UpdateKnown()
 	end
 
 	AlterTime.revert.known = AlterTime.known
-	ArcaneSoul.known = MemoryOfAlar.known
+	Hero.ArcaneSoul.known = Hero.MemoryOfAlar.known
 	ArcaneSurge.buff.known = ArcaneSurge.known
 	SiphonStorm.known = Evocation.known
+	TouchOfTheMagi.Explosion.known = TouchOfTheMagi.known
 	if LonelyWinter.known then
 		SummonWaterElemental.known = false
 	end
@@ -2060,18 +2068,19 @@ function Player:UpdateKnown()
 	else
 		Bolt = Frostbolt
 	end
-	if FrostfireBolt.known then
+	if Hero.FrostfireBolt.known then
 		Frostbolt.known = false
 		Fireball.known = false
-		Bolt = FrostfireBolt
+		Bolt = Hero.FrostfireBolt
 	end
-	if MemoryOfAlar.known then
+	if Hero.MemoryOfAlar.known then
 		Hyperthermia.known = true
 	end
-	if UnerringProficiency.known then
-		UnerringProficiency.IceNova.known = self.spec == SPEC.FROST
-		UnerringProficiency.Supernova.known = self.spec == SPEC.ARCANE
+	if Hero.UnerringProficiency.known then
+		Hero.UnerringProficiency.IceNova.known = self.spec == SPEC.FROST
+		Hero.UnerringProficiency.Supernova.known = self.spec == SPEC.ARCANE
 	end
+	EtherealReaping.known = true
 
 	Abilities:Update()
 	SummonedPets:Update()
@@ -2371,7 +2380,7 @@ function Target:TimeToPct(pct)
 end
 
 function Target:Frozen()
-	return FrostNova:Up() or WintersChill:Up() or (IceNova.known and IceNova:Up()) or (Freeze.known and Freeze:Up()) or (GlacialSpike.known and GlacialSpike:Up()) or (Frostbite.known and Frostbite:Up())
+	return FrostNova:Up() or WintersChill:Up() or (IceNova.known and IceNova:Up()) or (Freeze.known and Freeze:Up()) or (GlacialSpike.known and GlacialSpike:Up()) or (PvP.Frostbite.known and PvP.Frostbite:Up())
 end
 
 -- End Target Functions
@@ -2401,6 +2410,21 @@ function Clearcasting:MaxStack()
 	return stack
 end
 
+function ArcaneBarrage:Free()
+	return (
+		(Hero.BurdenOfPower.known and Hero.BurdenOfPower:Up()) or
+		(Hero.ArcaneSoul.known and Hero.ArcaneSoul:Up()) or
+		(Intuition.known and Intuition:Up())
+	)
+end
+
+function Hero.ArcaneSoul:Remains(offGCD)
+	if not offGCD and Hero.MemoryOfAlar.known and Hero.InvocationArcanePhoenix.known and Pet.ArcanePhoenix:Expiring() > 0 then
+		return self:Duration()
+	end
+	return Ability.Remains(self, offGCD)
+end
+
 function ArcaneSurge.buff:Remains()
 	if ArcaneSurge:Casting() then
 		return self:Duration()
@@ -2423,7 +2447,7 @@ function ArcaneMissiles:Available()
 	return Clearcasting:Up()
 end
 
-function BurdenOfPower:Remains()
+function Hero.BurdenOfPower:Remains()
 	if ArcaneBlast:Casting() then
 		return 0
 	end
@@ -2591,8 +2615,8 @@ function HotStreak:Remains()
 	return Ability.Remains(self)
 end
 
-function FrostfireBolt:Free()
-	return FrostfireEmpowerment.known and FrostfireEmpowerment:Up()
+function Hero.FrostfireBolt:Free()
+	return Hero.FrostfireEmpowerment.known and Hero.FrostfireEmpowerment:Up()
 end
 
 function Pyroblast:Free()
@@ -2612,8 +2636,8 @@ function Combustion:Duration()
 	if ImprovedCombustion.known then
 		duration = duration + 2
 	end
-	if SavorTheMoment.known then
-		duration = duration + min(2.5, SpellfireSpheres:Stack() * 0.5)
+	if Hero.SavorTheMoment.known then
+		duration = duration + min(2.5, Hero.SpellfireSpheres:Stack() * 0.5)
 	end
 	return duration
 end
@@ -2634,7 +2658,7 @@ function FuryOfTheSunKing:Remains(offGCD)
 end
 
 function Hyperthermia:Remains(offGCD)
-	if not offGCD and MemoryOfAlar.known and InvocationArcanePhoenix.known and Pet.ArcanePhoenix:Expiring() > 0 then
+	if not offGCD and Hero.MemoryOfAlar.known and Hero.InvocationArcanePhoenix.known and Pet.ArcanePhoenix:Expiring() > 0 then
 		return self:Duration()
 	end
 	return Ability.Remains(self, offGCD)
@@ -2676,8 +2700,8 @@ function Blizzard:CastSuccess(...)
 	self.ground_duration = self:Duration()
 end
 
-function SpellfireSpheres:MaxStack()
-	if Rondurmancy.known then
+function Hero.SpellfireSpheres:MaxStack()
+	if Hero.Rondurmancy.known then
 		return 5
 	end
 	return Ability.MaxStack(self)
@@ -2818,7 +2842,7 @@ actions+=/arcane_barrage
 			if apl then return apl end
 		end
 	end
-	if SpellfireSpheres.known then
+	if Hero.SpellfireSpheres.known then
 		return self:sunfury()
 	end
 	return self:spellslinger()
@@ -2836,7 +2860,7 @@ actions.precombat+=/variable,name=steroid_trinket_equipped,op=set,value=equipped
 actions.precombat+=/variable,name=nonsteroid_trinket_equipped,op=set,value=equipped.blastmaster3000|equipped.ratfang_toxin|equipped.ingenious_mana_battery|equipped.geargrinders_spare_keys|equipped.ringing_ritual_mud|equipped.goo_blin_grenade|equipped.noggenfogger_ultimate_deluxe|equipped.garbagemancers_last_resort|equipped.mad_queens_mandate|equipped.fearbreakers_echo|equipped.mereldars_toll|equipped.gooblin_grenade|equipped.perfidious_projector|equipped.chaotic_nethergate
 ]]
 	self.soul_burst = false
-	self.soul_cd = Player.set_bonus.tww3 >= 4 and SpellfireSpheres.known and Resonance.known and not MagisSpark.known and Player.enemies >= 3 and self.soul_burst
+	self.soul_cd = Player.set_bonus.tww3 >= 4 and Hero.SpellfireSpheres.known and Resonance.known and not MagisSpark.known and Player.enemies >= 3 and self.soul_burst
 	self.aoe_target_count = ArcingCleave.known and 2 or 9
 	self.opener = Target.boss and TouchOfTheMagi:Ready()
 	self.aoe_list = 0
@@ -2913,7 +2937,7 @@ actions.cd_opener_soul+=/touch_of_the_magi,if=(buff.arcane_surge.remains<=2.5&pr
 	end
 	if Evocation:Usable() and (
 		(not ArcaneSurge.known and Target.timeToDie > 8) or
-		(ArcaneSurge:Up() and ArcaneSurge:Remains() <= ((GloriousIncandescence:Up() or Intuition:Up()) and 10 or 8.5))
+		(ArcaneSurge:Up() and ArcaneSurge:Remains() <= ((Hero.GloriousIncandescence:Up() or Intuition:Up()) and 10 or 8.5))
 	) then
 		UseCooldown(Evocation)
 	end
@@ -2953,7 +2977,7 @@ actions.sunfury+=/arcane_blast
 actions.sunfury+=/arcane_barrage
 ]]
 	if self.use_cds then
-		if ShiftingPower:Usable() and ArcaneSoul:Down() and (
+		if ShiftingPower:Usable() and Hero.ArcaneSoul:Down() and (
 			ArcaneSurge:Down() and SiphonStorm:Down() and TouchOfTheMagi:Down() and (not Evocation.known or not Evocation:Ready(15)) and not TouchOfTheMagi:Ready(10)
 		) and (
 			not Intuition.known or
@@ -2966,11 +2990,11 @@ actions.sunfury+=/arcane_barrage
 			UseCooldown(PresenceOfMind)
 		end
 	end
-	if ArcaneSoul.known then
-		if ArcaneMissiles:Usable() and NetherPrecision:Down() and ArcaneSoul:Remains() > (Player.gcd * 3) then
+	if Hero.ArcaneSoul.known then
+		if ArcaneMissiles:Usable() and NetherPrecision:Down() and Hero.ArcaneSoul:Remains() > (Player.gcd * 3) then
 			return ArcaneMissiles
 		end
-		if ArcaneBarrage:Usable() and ArcaneSoul:Up() then
+		if ArcaneBarrage:Usable() and Hero.ArcaneSoul:Up() then
 			return ArcaneBarrage
 		end
 	end
@@ -3003,7 +3027,7 @@ actions.sunfury+=/arcane_barrage
 	if ArcaneBarrage:Usable() and Player.arcane_charges.current >= 4 and (
 		(HighVoltage.known and Player.enemies > 1 and Clearcasting:Up() and (
 			NetherPrecision:Stack() == 1 or
-			(AetherAttunement.known and AetherAttunement:Up() and GloriousIncandescence:Down() and Intuition:Down())
+			(AetherAttunement.known and AetherAttunement:Up() and Hero.GloriousIncandescence:Down() and Intuition:Down())
 		)) or
 		(HighVoltage.known and ArcaneBombardment.known and OrbBarrage.known and Player.enemies > 2 and Target.health.pct < 35 and MagisSpark.ArcaneBlast:Down() and (
 			NetherPrecision:Up() or
@@ -3030,9 +3054,9 @@ actions.sunfury+=/arcane_barrage
 		(HighVoltage.known and Player.arcane_charges.current < 4) or
 		(NetherPrecision:Down() and (
 			Clearcasting:Stack() > 1 or
-			SpellfireSpheres:Stack() == 6 or
-			BurdenOfPower:Up() or
-			GloriousIncandescence:Up() or
+			Hero.SpellfireSpheres:Stack() == 6 or
+			Hero.BurdenOfPower:Up() or
+			Hero.GloriousIncandescence:Up() or
 			Intuition:Up()
 		))
 	) then
@@ -3042,7 +3066,7 @@ actions.sunfury+=/arcane_barrage
 		UseCooldown(ArcaneOrb)
 	end
 	if ArcaneBarrage:Usable() and (
-		GloriousIncandescence:Up() or
+		Hero.GloriousIncandescence:Up() or
 		Intuition:Up()
 	) then
 		return ArcaneBarrage
@@ -3378,7 +3402,7 @@ actions.combustion_phase+=/fireball
 			local apl = self:skb()
 			if apl then return apl end
 		end
-		if Meteor:Usable() and IsothermicCore.known and Combustion:Ready(0.5) then
+		if Meteor:Usable() and Hero.IsothermicCore.known and Combustion:Ready(0.5) then
 			UseCooldown(Meteor)
 		end
 		if Hyperthermia.known and Combustion:Usable() and Hyperthermia:Up() then
@@ -3390,12 +3414,12 @@ actions.combustion_phase+=/fireball
 		if Scorch:Usable() and Combustion:Ready(Scorch:CastTime()) and Hyperthermia:Down() then
 			return Scorch
 		end
-		if FrostfireEmpowerment.known and Bolt:Usable() and FrostfireEmpowerment:Up() then
+		if Hero.FrostfireEmpowerment.known and Bolt:Usable() and Hero.FrostfireEmpowerment:Up() then
 			return Bolt
 		end
 	end
 	self.TA_combust = Combustion:Ready(10) and self.in_combust
-	if SpellfireSpheres.known and PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and HeatingUp:Up() then
+	if Hero.SpellfireSpheres.known and PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and HeatingUp:Up() then
 		return PhoenixFlames
 	end
 	if FireBlast:Usable() and not self.fire_blast_pooling and (not ImprovedScorch:Active() or Scorch:Casting() or ImprovedScorch:Remains() > (4 * Player.gcd)) and (FuryOfTheSunKing:Down() or Pyroblast:Casting()) and self.in_combust_off_gcd and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight_off_gcd) < 2 and (not self.TA_combust or SunKingsBlessing.known or Player.fb_charges > 2.5) then
@@ -3414,7 +3438,7 @@ actions.combustion_phase+=/fireball
 		local apl = self:skb()
 		if apl then return apl end
 	end
-	if FrostfireEmpowerment.known and Bolt:Usable() and FrostfireEmpowerment:Up() and HotStreak:Down() and ExcessFrost:Down() then
+	if Hero.FrostfireEmpowerment.known and Bolt:Usable() and Hero.FrostfireEmpowerment:Up() and HotStreak:Down() and Hero.ExcessFrost:Down() then
 		return Bolt
 	end
 	if PhoenixReborn.known and PhoenixFlames:Usable() and FlamesFury:Up() and HotStreak:Down() and ((HeatingUp:Up() and 1 or 0) + self.hot_streak_spells_in_flight) < 2 then
@@ -3432,7 +3456,7 @@ actions.combustion_phase+=/fireball
 	) then
 		return PhoenixFlames
 	end
-	if FrostfireEmpowerment.known and Bolt:Usable() and FrostfireEmpowerment:Up() and HotStreak:Down() then
+	if Hero.FrostfireEmpowerment.known and Bolt:Usable() and Hero.FrostfireEmpowerment:Up() and HotStreak:Down() then
 		return Bolt
 	end
 	if Scorch:Usable() and Combustion:Remains() > Scorch:CastTime() and Scorch:CastTime() >= Player.gcd then
@@ -3488,7 +3512,7 @@ actions.standard_rotation+=/fireball
 	if Flamestrike:Usable() and (Player.enemies >= self.hot_streak_flamestrike or (MajestyOfThePhoenix.known and Player.enemies >= (Quickflame.known and 2 or 3) and MajestyOfThePhoenix:Stack() >= MajestyOfThePhoenix:MaxStack())) and (HotStreak:Up() or Hyperthermia:Up()) then
 		return Flamestrike
 	end
-	if Bolt:Usable() and HotStreak:Up() and FrostfireEmpowerment:Down() and Hyperthermia:Down() and not ShiftingPower:Ready() and PhoenixFlames:Charges() < 1 and not Scorch:Execute() and not Bolt:Previous() and Bolt:Traveling() == 0 then
+	if Bolt:Usable() and HotStreak:Up() and Hero.FrostfireEmpowerment:Down() and Hyperthermia:Down() and not ShiftingPower:Ready() and PhoenixFlames:Charges() < 1 and not Scorch:Execute() and not Bolt:Previous() and Bolt:Traveling() == 0 then
 		return Bolt
 	end
 	if Pyroblast:Usable() and (
@@ -3534,7 +3558,7 @@ actions.standard_rotation+=/fireball
 	if ImprovedScorch.known and Scorch:Usable() and ImprovedScorch:Active() and ImprovedScorch:Stack() < ImprovedScorch:MaxStack() and Target.timeToDie > (4 + ImprovedScorch:Remains()) then
 		return Scorch
 	end
-	if FrostfireEmpowerment.known and Bolt:Usable() and FrostfireEmpowerment:Up() and HotStreak:Down() and ExcessFrost:Down() then
+	if Hero.FrostfireEmpowerment.known and Bolt:Usable() and Hero.FrostfireEmpowerment:Up() and HotStreak:Down() and Hero.ExcessFrost:Down() then
 		return Bolt
 	end
 	if HeatShimmer.known and Scorch:Usable() and HeatShimmer:Up() and (Scald.known or ImprovedScorch.known) and Player.enemies < self.combustion_flamestrike then
@@ -3748,8 +3772,8 @@ APL[SPEC.FROST].aoe = function(self)
 	if IceLance:Usable() and (FingersOfFrost:Up() or (Target:Frozen() and not IceLance:Previous()) or WintersChill:Remains() > IceLance:TravelTime()) then
 		return IceLance
 	end
-	if BurstOfCold.known and ConeOfCold:Usable() and BurstOfCold:Up() and (Target:Frozen() or BurstOfCold:Remains() < Player.gcd) then
-		UseCooldown(BurstOfCold)
+	if PvP.BurstOfCold.known and ConeOfCold:Usable() and PvP.BurstOfCold:Up() and (Target:Frozen() or PvP.BurstOfCold:Remains() < Player.gcd) then
+		UseCooldown(PvP.BurstOfCold)
 	end
 	if ShiftingPower:Usable() and not FrozenOrb:Ready(8) and (not FreezingWinds.known or FreezingWinds:Down()) then
 		UseCooldown(ShiftingPower)
