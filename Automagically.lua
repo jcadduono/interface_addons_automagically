@@ -2222,7 +2222,7 @@ function Player:Update()
 	if Blizzard.known then
 		self.blizzard_remains = Blizzard:Remains()
 	end
-	self.major_cd_remains = (Combustion.known and Combustion:Remains()) or (IcyVeins.known and IcyVeins:Remains()) or (ArcaneSurge.known and ArcaneSurge:Remains()) or 0
+	self.major_cd_remains = (Combustion.known and Combustion:Remains()) or (IcyVeins.known and IcyVeins:Remains()) or (ArcaneSurge.known and ArcaneSurge.buff:Remains()) or 0
 
 	self.main = APL[self.spec]:Main()
 
@@ -2412,7 +2412,7 @@ end
 
 function ArcaneBarrage:Free()
 	return (
-		(Hero.BurdenOfPower.known and Hero.BurdenOfPower:Up()) or
+		(Hero.GloriousIncandescence.known and Hero.GloriousIncandescence:Up()) or
 		(Hero.ArcaneSoul.known and Hero.ArcaneSoul:Up()) or
 		(Intuition.known and Intuition:Up())
 	)
@@ -2800,7 +2800,7 @@ actions.precombat+=/arcane_surge,if=variable.soul_cd
 	else
 		if ArcaneIntellect:Usable() and ArcaneIntellect:Remains() < 10 then
 			UseExtra(ArcaneIntellect)
-		elseif Opt.barrier and PrismaticBarrier:Usable() and PrismaticBarrier:Remains() < 5 and ArcaneSurge:Down() and TouchOfTheMagi:Down() then
+		elseif Opt.barrier and PrismaticBarrier:Usable() and PrismaticBarrier:Remains() < 5 and Player.major_cd_remains == 0 and TouchOfTheMagi:Down() then
 			UseExtra(PrismaticBarrier)
 		elseif MirrorImage:Usable() and Player:UnderAttack() then
 			UseExtra(MirrorImage)
@@ -2825,7 +2825,7 @@ actions+=/call_action_list,name=sunfury,if=talent.spellfire_spheres
 actions+=/call_action_list,name=spellslinger,if=!talent.spellfire_spheres
 actions+=/arcane_barrage
 ]]
-	self.use_cds = Target.boss or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or (ArcaneSurge.known and ArcaneSurge:Remains() > 6)
+	self.use_cds = Target.boss or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or (ArcaneSurge.known and Player.major_cd_remains > 6)
 	if self.opener and TouchOfTheMagi:Up() then
 		self.opener = 0
 	end
@@ -2869,7 +2869,7 @@ end
 
 APL[SPEC.ARCANE].channel_interrupt = {
 	[1] = function() -- Arcane Missiles
-		return Player.gcd_remains == 0 and AetherAttunement:Down()
+		return AetherAttunement:Down()
 	end,
 }
 
@@ -2937,12 +2937,12 @@ actions.cd_opener_soul+=/touch_of_the_magi,if=(buff.arcane_surge.remains<=2.5&pr
 	end
 	if Evocation:Usable() and (
 		(not ArcaneSurge.known and Target.timeToDie > 8) or
-		(ArcaneSurge:Up() and ArcaneSurge:Remains() <= ((Hero.GloriousIncandescence:Up() or Intuition:Up()) and 10 or 8.5))
+		between(Player.major_cd_remains, 0.1, (Hero.GloriousIncandescence:Up() or Intuition:Up()) and 10 or 8.5)
 	) then
 		UseCooldown(Evocation)
 	end
 	if TouchOfTheMagi:Usable() and (
-		(ArcaneBarrage:Previous() and (ArcaneSurge:Remains() <= 2.5 or between(Evocation:Cooldown(), 40, 60))) or
+		(ArcaneBarrage:Previous() and (Player.major_cd_remains <= 2.5 or between(Evocation:Cooldown(), 40, 60))) or
 		(Target.boss and Target.timeToDie < 15)
 	) then
 		UseCooldown(TouchOfTheMagi)
@@ -2977,9 +2977,7 @@ actions.sunfury+=/arcane_blast
 actions.sunfury+=/arcane_barrage
 ]]
 	if self.use_cds then
-		if ShiftingPower:Usable() and Hero.ArcaneSoul:Down() and (
-			ArcaneSurge:Down() and SiphonStorm:Down() and TouchOfTheMagi:Down() and (not Evocation.known or not Evocation:Ready(15)) and not TouchOfTheMagi:Ready(10)
-		) and (
+		if ShiftingPower:Usable() and Hero.ArcaneSoul:Down() and Player.major_cd_remains == 0 and SiphonStorm:Down() and TouchOfTheMagi:Down() and (not Evocation.known or not Evocation:Ready(15)) and (not TouchOfTheMagi.known or not TouchOfTheMagi:Ready(10)) and (
 			not Intuition.known or
 			Intuition:Down() or
 			Intuition:Remains() > (4 * Player.haste_factor)
@@ -2998,7 +2996,7 @@ actions.sunfury+=/arcane_barrage
 			return ArcaneBarrage
 		end
 	end
-	if ArcaneMissiles:Usable() and between(ArcaneSurge:Remains(), 0.1, Player.gcd) then
+	if ArcaneMissiles:Usable() and between(Player.major_cd_remains, 0.1, Player.gcd) then
 		return ArcaneMissiles
 	end
 	if ArcaneBarrage:Usable() and (
@@ -3015,9 +3013,9 @@ actions.sunfury+=/arcane_barrage
 	if AetherAttunement.known and ArcaneMissiles:Usable() and Player.set_bonus.tww2 >= 4 and AetherAttunement:Up() and TouchOfTheMagi:Ready(Player.gcd * (3 - ((Player.enemies > 3 and (not TimeLoop.known or Resonance.known)) and 1.5 or 0))) then
 		return ArcaneMissiles
 	end
-	if self.use_cds and TouchOfTheMagi.known and ArcaneBarrage:Usable() and TouchOfTheMagi:Ready(Player.gcd) and (
-		(not self.soul_cd and Player.arcane_charges.current >= 4) or
-		(self.soul_cd and ArcaneSurge:Remains() <= 2.5)
+	if self.use_cds and TouchOfTheMagi.known and ArcaneBarrage:Usable() and TouchOfTheMagi:Ready(0.5) and (
+		(not self.soul_cd and Player.arcane_charges.current >= 4 and (Player.major_cd_remains > 0 or not ArcaneSurge:Ready(30))) or
+		(self.soul_cd and Player.major_cd_remains <= 2.5)
 	) then
 		return ArcaneBarrage
 	end
