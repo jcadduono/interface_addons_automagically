@@ -2827,7 +2827,7 @@ actions+=/arcane_barrage
 ]]
 	self.use_cds = Target.boss or Target.player or Target.timeToDie > (Opt.cd_ttd - min(Player.enemies - 1, 6)) or (ArcaneSurge.known and Player.major_cd_remains > 6)
 	if self.opener and TouchOfTheMagi:Up() then
-		self.opener = 0
+		self.opener = false
 	end
 	if Target.boss and ArcaneBarrage:Usable() and Target.timeToDie < 2 then
 		return ArcaneBarrage
@@ -2855,7 +2855,6 @@ actions.precombat+=/variable,name=soul_cd,op=set,value=1,if=set_bonus.thewarwith
 actions.precombat+=/variable,name=aoe_target_count,op=reset,default=2
 actions.precombat+=/variable,name=aoe_target_count,op=set,value=9,if=!talent.arcing_cleave
 actions.precombat+=/variable,name=opener,op=set,value=1
-actions.precombat+=/variable,name=aoe_list,default=0,op=reset
 actions.precombat+=/variable,name=steroid_trinket_equipped,op=set,value=equipped.gladiators_badge|equipped.signet_of_the_priory|equipped.imperfect_ascendancy_serum|equipped.quickwick_candlestick|equipped.soulletting_ruby|equipped.funhouse_lens|equipped.house_of_cards|equipped.flarendos_pilot_light|equipped.neural_synapse_enhancer|equipped.lily_of_the_eternal_weave|equipped.sunblood_amethyst|equipped.arazs_ritual_forge|equipped.incorporeal_essencegorger
 actions.precombat+=/variable,name=nonsteroid_trinket_equipped,op=set,value=equipped.blastmaster3000|equipped.ratfang_toxin|equipped.ingenious_mana_battery|equipped.geargrinders_spare_keys|equipped.ringing_ritual_mud|equipped.goo_blin_grenade|equipped.noggenfogger_ultimate_deluxe|equipped.garbagemancers_last_resort|equipped.mad_queens_mandate|equipped.fearbreakers_echo|equipped.mereldars_toll|equipped.gooblin_grenade|equipped.perfidious_projector|equipped.chaotic_nethergate
 ]]
@@ -2863,7 +2862,6 @@ actions.precombat+=/variable,name=nonsteroid_trinket_equipped,op=set,value=equip
 	self.soul_cd = Player.set_bonus.tww3 >= 4 and Hero.SpellfireSpheres.known and Resonance.known and not MagisSpark.known and Player.enemies >= 3 and self.soul_burst
 	self.aoe_target_count = ArcingCleave.known and 2 or 9
 	self.opener = Target.boss and TouchOfTheMagi:Ready()
-	self.aoe_list = 0
 	ArcaneMissiles.interrupt_if = self.channel_interrupt[1]
 end
 
@@ -2891,7 +2889,7 @@ actions.cd_opener+=/arcane_surge,if=cooldown.touch_of_the_magi.remains<(action.a
 	) then
 		UseCooldown(TouchOfTheMagi)
 	end
-	if PresenceOfMind.known and ArcaneBlast:Usable() and PresenceOfMind:Up() then
+	if PresenceOfMind.known and ArcaneBlast:Usable() and PresenceOfMind:Up() and Hero.ArcaneSoul:Down() then
 		return ArcaneBlast
 	end
 	if self.opener and HighVoltage.known and ArcaneOrb:Usable() then
@@ -2984,7 +2982,7 @@ actions.sunfury+=/arcane_barrage
 		) then
 			UseCooldown(ShiftingPower)
 		end
-		if PresenceOfMind:Usable() and TouchOfTheMagi:Remains() <= Player.gcd and NetherPrecision:Up() and Player.enemies < 4 then
+		if PresenceOfMind:Usable() and Player.enemies < 4 and TouchOfTheMagi:Remains() <= Player.gcd and NetherPrecision:Up() and Hero.ArcaneSoul:Down() then
 			UseCooldown(PresenceOfMind)
 		end
 	end
